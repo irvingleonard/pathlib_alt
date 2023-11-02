@@ -120,7 +120,7 @@ class BasePurePath(tuple):
 
 	def __repr__(self):
 		'''Repr magic
-		Create a machine frisndly representation of the object.
+		Create a machine friendly representation of the object.
 		'''
 
 		return ("{}({})").format(self.__class__.__name__, repr(str(self)))
@@ -147,7 +147,10 @@ class BasePurePath(tuple):
 
 	def __str__(self):
 		'''String magic
-		Return the string representation of the path, suitable for passing to system calls.'''
+		Return the string representation of the path, suitable for passing to system calls.
+
+		ToDo: Why default to "."?
+		'''
 
 		try:
 			return self._str
@@ -347,7 +350,7 @@ class BasePurePath(tuple):
 
 		if suffix and not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
 			raise ValueError("Invalid suffix %r" % (suffix))
-		return self.with_name(stem + suffix)
+		return self.with_name(self.stem + suffix)
 
 	def with_suffixes(self, *suffixes):
 		'''Return a similar path with the file suffixes replaced.
@@ -359,7 +362,7 @@ class BasePurePath(tuple):
 		for suffix in suffixes:
 			if not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
 				raise ValueError("Invalid suffix %r" % (suffix))
-		return self.with_name(pure_stem + ''.join(suffixes))
+		return self.with_name(self.pure_stem + ''.join(suffixes))
 
 	@classmethod
 	def new_instance(cls, *args, **kwargs):
