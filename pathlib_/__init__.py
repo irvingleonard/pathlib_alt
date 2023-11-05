@@ -364,11 +364,6 @@ class BasePurePath(tuple):
 				raise ValueError("Invalid suffix %r" % (suffix))
 		return self.with_name(self.pure_stem + ''.join(suffixes))
 
-	@classmethod
-	def new_instance(cls, *args, **kwargs):
-		result = cls(*args, **kwargs)
-		return result[:]
-
 
 class PurePosixPath(BasePurePath):
 
