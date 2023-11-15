@@ -5,12 +5,298 @@ The original pathlib module seems to revolve around the idea that the path is a 
 This submodule implements the basis of the protocol (abstract and base classes).
 '''
 
+import abc
 import logging
 import os
 
 __version__ = '2023.1'
 
 LOGGER = logging.getLogger(__name__)
+	
+
+class BasePath(abc.ABC):
+	'''
+	'''
+	
+	@abc.abstractmethod
+	def cwd(self):
+		'''
+		'''
+		
+		raise NotImplementedError('cwd')
+	
+	@abc.abstractmethod
+	def home(self):
+		'''
+		'''
+		
+		raise NotImplementedError('home')
+	
+	@abc.abstractmethod
+	def stat(self, *ignoring, follow_symlinks = True):
+		'''
+		'''
+		
+		raise NotImplementedError('stat')
+	
+	@abc.abstractmethod
+	def chmod(self, mode, *ignoring, follow_symlinks = True):
+		'''
+		'''
+		
+		raise NotImplementedError('chmod')
+	
+	@abc.abstractmethod
+	def exists(self, *ignoring, follow_symlinks = True):
+		'''
+		'''
+		
+		raise NotImplementedError('exists')
+	
+	@abc.abstractmethod
+	def expanduser(self):
+		'''
+		'''
+		
+		raise NotImplementedError('expanduser')
+	
+	@abc.abstractmethod
+	def glob(self, pattern, *ignoring, case_sensitive = None):
+		'''
+		'''
+		
+		raise NotImplementedError('glob')
+	
+	@abc.abstractmethod
+	def group(self):
+		'''
+		'''
+		
+		raise NotImplementedError('group')
+	
+	@abc.abstractmethod	
+	def is_dir(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_dir')
+	
+	@abc.abstractmethod
+	def is_file(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_file')
+	
+	@abc.abstractmethod
+	def is_junction(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_junction')
+	
+	@abc.abstractmethod
+	def is_mount(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_mount')
+	
+	@abc.abstractmethod
+	def is_symlink(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_symlink')
+	
+	@abc.abstractmethod
+	def is_socket(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_socket')
+	
+	@abc.abstractmethod
+	def is_fifo(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_fifo')
+	
+	@abc.abstractmethod
+	def is_block_device(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_block_device')
+	
+	@abc.abstractmethod
+	def is_char_device(self):
+		'''
+		'''
+		
+		raise NotImplementedError('is_char_device')
+	
+	@abc.abstractmethod
+	def iterdir(self):
+		'''
+		'''
+		
+		raise NotImplementedError('iterdir')
+	
+	@abc.abstractmethod
+	def walk(self, top_down = True, on_error = None, follow_symlinks = False):
+		'''
+		'''
+		
+		raise NotImplementedError('walk')
+	
+	@abc.abstractmethod
+	def lchmod(self, mode):
+		'''
+		'''
+		
+		raise NotImplementedError('lchmod')
+	
+	@abc.abstractmethod
+	def lstat(self):
+		'''
+		'''
+		
+		raise NotImplementedError('lstat')
+	
+	@abc.abstractmethod
+	def mkdir(self, mode = 0o777, parents = False, exist_ok = False):
+		'''
+		'''
+		
+		raise NotImplementedError('mkdir')
+	
+	@abc.abstractmethod
+	def open(self, mode = 'r', buffering = - 1, encoding = None, errors = None, newline = None):
+		'''
+		'''
+		
+		raise NotImplementedError('open')
+	
+	@abc.abstractmethod
+	def owner(self):
+		'''
+		'''
+		
+		raise NotImplementedError('owner')
+	
+	@abc.abstractmethod
+	def read_bytes(self):
+		'''
+		'''
+		
+		raise NotImplementedError('read_bytes')
+	
+	@abc.abstractmethod
+	def read_text(self, encoding = None, errors = None):
+		'''
+		'''
+		
+		raise NotImplementedError('read_text')
+	
+	@abc.abstractmethod
+	def readlink(self):
+		'''
+		'''
+		
+		raise NotImplementedError('readlink')
+	
+	@abc.abstractmethod
+	def rename(self, target):
+		'''
+		'''
+		
+		raise NotImplementedError('rename')
+	
+	@abc.abstractmethod
+	def replace(self, target):
+		'''
+		'''
+		
+		raise NotImplementedError('replace')
+	
+	@abc.abstractmethod
+	def absolute(self):
+		'''
+		'''
+		
+		raise NotImplementedError('absolute')
+	
+	@abc.abstractmethod
+	def resolve(self, strict = False):
+		'''
+		'''
+		
+		raise NotImplementedError('resolve')
+	
+	@abc.abstractmethod
+	def rglob(self, pattern, *ignoring, case_sensitive = None):
+		'''
+		'''
+		
+		raise NotImplementedError('rglob')
+	
+	@abc.abstractmethod
+	def rmdir(self):
+		'''
+		'''
+		
+		raise NotImplementedError('rmdir')
+	
+	@abc.abstractmethod
+	def samefile(self, other_path):
+		'''
+		'''
+		
+		raise NotImplementedError('samefile')
+	
+	@abc.abstractmethod
+	def symlink_to(self, target, target_is_directory = False):
+		'''
+		'''
+		
+		raise NotImplementedError('symlink_to')
+	
+	@abc.abstractmethod
+	def hardlink_to(self, target):
+		'''
+		'''
+		
+		raise NotImplementedError('hardlink_to')
+	
+	@abc.abstractmethod
+	def touch(self, mode = 0o666, exist_ok = True):
+		'''
+		'''
+		
+		raise NotImplementedError('touch')
+	
+	@abc.abstractmethod
+	def unlink(self, missing_ok = False):
+		'''
+		'''
+		
+		raise NotImplementedError('unlink')
+	
+	@abc.abstractmethod
+	def write_bytes(self, data):
+		'''
+		'''
+		
+		raise NotImplementedError('write_bytes')
+	
+	@abc.abstractmethod
+	def write_text(self, data, encoding = None, errors = None, newline = None):
+		'''
+		'''
+		
+		raise NotImplementedError('write_text')
 	
 
 class BasePurePath(tuple):

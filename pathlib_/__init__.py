@@ -9,7 +9,7 @@ import logging
 import os
 
 from ._base import BasePurePath
-from .posix import PurePosixPath
+from .posix import PosixPath, PurePosixPath
 from .windows import PureWindowsPath
 
 __version__ = '0.1.0'

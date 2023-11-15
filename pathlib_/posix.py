@@ -7,7 +7,7 @@ This submodule contains the specifics for POSIX systems.
 
 import logging
 
-from ._base import BasePurePath
+from ._base import BasePath, BasePurePath
 
 __version__ = '2023.1'
 
@@ -52,3 +52,10 @@ class PurePosixPath(BasePurePath):
 		if not self.is_absolute():
 			raise ValueError("relative path can't be expressed as a file URI")
 		return 'file://' + str(self)
+
+
+class PosixPath(BasePath, PurePosixPath):
+	
+	@classmethod
+	def new_instance(cls, *args, **kwargs):
+		return cls(*args, **kwargs).cwd()
