@@ -9,6 +9,7 @@ import abc
 import io
 import logging
 import os
+import stat
 
 __version__ = '2023.1'
 
@@ -368,148 +369,20 @@ class BasePurePath(tuple):
 
 
 class BasePath(abc.ABC):
+	'''Base class for I/O enabled methods.
+	BasePath implements the diverse methods that do I/O.
+
+	This class is mostly abstract and defines the rest of the public interface of a concrete Path (in addition to BasePurePath). Only a few high level methods are implemented and the rest (the most part of the class) are abstract and should be overriden by the child classes. Some mechanisms, like all the stat related methods, are not truly portable (not applicable to virtual filesystems, for example) so they're not implemented here. The enhancement of this class for local filesystems is called BaseOSPath.
 	'''
-	'''
 
-	@abc.abstractclassmethod
-	def cwd(self):
-		'''
-		'''
-
-		raise NotImplementedError('cwd')
-
-	@abc.abstractclassmethod
-	def home(cls):
-		'''
-		'''
-
-		raise NotImplementedError('home')
+	## Querying file type and status ##
 
 	@abc.abstractmethod
 	def stat(self, *ignoring, follow_symlinks = True):
-		'''
+		'''Return the result of the stat() system call on this path, like os.stat() does.
 		'''
 
 		raise NotImplementedError('stat')
-
-	@abc.abstractmethod
-	def chmod(self, mode, *ignoring, follow_symlinks = True):
-		'''
-		'''
-
-		raise NotImplementedError('chmod')
-
-	@abc.abstractmethod
-	def exists(self, *, follow_symlinks = True):
-		'''
-		'''
-
-		raise NotImplementedError('exists')
-
-	@abc.abstractmethod
-	def expanduser(self):
-		'''
-		'''
-
-		raise NotImplementedError('expanduser')
-
-	@abc.abstractmethod
-	def glob(self, pattern, *, case_sensitive = None):
-		'''
-		'''
-
-		raise NotImplementedError('glob')
-
-	@abc.abstractmethod
-	def group(self):
-		'''
-		'''
-
-		raise NotImplementedError('group')
-
-	@abc.abstractmethod
-	def is_dir(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_dir')
-
-	@abc.abstractmethod
-	def is_file(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_file')
-
-	def is_junction(self):
-		'''Whether this path is a junction.
-		Junctions are a Windows-only feature, not present in POSIX nor the majority of virtual filesystems. There is no cross-platform idiom to check for junctions (using stat().st_mode).
-		'''
-
-		return False
-
-	@abc.abstractmethod
-	def is_mount(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_mount')
-
-	@abc.abstractmethod
-	def is_symlink(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_symlink')
-
-	@abc.abstractmethod
-	def is_socket(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_socket')
-
-	@abc.abstractmethod
-	def is_fifo(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_fifo')
-
-	@abc.abstractmethod
-	def is_block_device(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_block_device')
-
-	@abc.abstractmethod
-	def is_char_device(self):
-		'''
-		'''
-
-		raise NotImplementedError('is_char_device')
-
-	@abc.abstractmethod
-	def iterdir(self):
-		'''
-		'''
-
-		raise NotImplementedError('iterdir')
-
-	@abc.abstractmethod
-	def walk(self, top_down = True, on_error = None, follow_symlinks = False):
-		'''
-		'''
-
-		raise NotImplementedError('walk')
-
-	def lchmod(self, mode):
-		'''
-		Like chmod(), except if the path points to a symlink, the symlink's permissions are changed, rather than its target's.
-		'''
-
-		self.chmod(mode, follow_symlinks = False)
 
 	@abc.abstractmethod
 	def lstat(self):
@@ -520,33 +393,91 @@ class BasePath(abc.ABC):
 		return self.stat(follow_symlinks = False)
 
 	@abc.abstractmethod
-	def mkdir(self, mode = 0o777, parents = False, exist_ok = False):
-		'''
+	def exists(self, *, follow_symlinks = True):
+		''' Whether this path exists.
+        This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
 		'''
 
-		raise NotImplementedError('mkdir')
+		raise NotImplementedError('exists')
+
+	@abc.abstractmethod
+	def is_file(self):
+		'''Whether this path is a regular file (also True for symlinks pointing to regular files).
+		'''
+
+		raise NotImplementedError('is_file')
+
+	@abc.abstractmethod
+	def is_dir(self):
+		'''Whether this path is a directory.
+		'''
+
+		raise NotImplementedError('is_dir')
+
+	@abc.abstractmethod
+	def is_symlink(self):
+		'''Whether this path is a symbolic link.
+		'''
+
+		raise NotImplementedError('is_symlink')
+
+	def is_junction(self):
+		'''Whether this path is a junction.
+		Junctions are a Windows-only feature, not present in POSIX nor the majority of virtual filesystems. There is no cross-platform idiom to check for junctions (using stat().st_mode).
+		'''
+
+		return False
+
+	@abc.abstractmethod
+	def is_mount(self):
+		'''Check if this path is a mount point
+		'''
+
+		raise NotImplementedError('is_mount')
+
+	@abc.abstractmethod
+	def is_socket(self):
+		'''Whether this path is a socket.
+		'''
+
+		raise NotImplementedError('is_socket')
+
+	@abc.abstractmethod
+	def is_fifo(self):
+		'''Whether this path is a FIFO.
+		'''
+
+		raise NotImplementedError('is_fifo')
+
+	@abc.abstractmethod
+	def is_block_device(self):
+		'''Whether this path is a block device.
+		'''
+
+		raise NotImplementedError('is_block_device')
+
+	@abc.abstractmethod
+	def is_char_device(self):
+		'''Whether this path is a character device.
+		'''
+
+		raise NotImplementedError('is_char_device')
+
+	@abc.abstractmethod
+	def samefile(self, other_path):
+		'''Return whether other_path is the same or not as this file (as returned by os.path.samefile()).
+		'''
+
+		raise NotImplementedError('samefile')
+
+	## Reading and writing files ##
 
 	@abc.abstractmethod
 	def open(self, mode = 'r', buffering = -1, encoding = None, errors = None, newline = None):
-		'''
+		'''Open the file pointed to by this path and return a file object, as the built-in open() function does.
 		'''
 
 		raise NotImplementedError('open')
-
-	@abc.abstractmethod
-	def owner(self):
-		'''
-		'''
-
-		raise NotImplementedError('owner')
-
-	def read_bytes(self):
-		'''
-		Open the file in bytes mode, read it, and close the file.
-		'''
-
-		with self.open(mode = 'rb') as f:
-			return f.read()
 
 	def read_text(self, encoding = None, errors = None):
 		'''
@@ -557,98 +488,13 @@ class BasePath(abc.ABC):
 		with self.open(mode = 'r', encoding = encoding, errors = errors) as f:
 			return f.read()
 
-	@abc.abstractmethod
-	def readlink(self):
+	def read_bytes(self):
 		'''
-		'''
-
-		raise NotImplementedError('readlink')
-
-	@abc.abstractmethod
-	def rename(self, target):
-		'''
+		Open the file in bytes mode, read it, and close the file.
 		'''
 
-		raise NotImplementedError('rename')
-
-	@abc.abstractmethod
-	def replace(self, target):
-		'''
-		'''
-
-		raise NotImplementedError('replace')
-
-	@abc.abstractmethod
-	def absolute(self):
-		'''
-		'''
-
-		raise NotImplementedError('absolute')
-
-	@abc.abstractmethod
-	def resolve(self, strict = False):
-		'''
-		'''
-
-		raise NotImplementedError('resolve')
-
-	@abc.abstractmethod
-	def rglob(self, pattern, *, case_sensitive = None):
-		'''
-		'''
-
-		raise NotImplementedError('rglob')
-
-	@abc.abstractmethod
-	def rmdir(self):
-		'''
-		'''
-
-		raise NotImplementedError('rmdir')
-
-	@abc.abstractmethod
-	def samefile(self, other_path):
-		'''
-		'''
-
-		raise NotImplementedError('samefile')
-
-	@abc.abstractmethod
-	def symlink_to(self, target, target_is_directory = False):
-		'''
-		'''
-
-		raise NotImplementedError('symlink_to')
-
-	@abc.abstractmethod
-	def hardlink_to(self, target):
-		'''
-		'''
-
-		raise NotImplementedError('hardlink_to')
-
-	@abc.abstractmethod
-	def touch(self, mode = 0o666, exist_ok = True):
-		'''
-		'''
-
-		raise NotImplementedError('touch')
-
-	@abc.abstractmethod
-	def unlink(self, missing_ok = False):
-		'''
-		'''
-
-		raise NotImplementedError('unlink')
-
-	def write_bytes(self, data):
-		'''
-		Open the file in bytes mode, write to it, and close the file.
-		'''
-
-		view = memoryview(data)
-		with self.open(mode = 'wb') as f:
-			return f.write(view)
+		with self.open(mode = 'rb') as f:
+			return f.read()
 
 	def write_text(self, data, encoding = None, errors = None, newline = None):
 		'''
@@ -661,9 +507,185 @@ class BasePath(abc.ABC):
 		with self.open(mode = 'w', encoding = encoding, errors = errors, newline = newline) as f:
 			return f.write(data)
 
+	def write_bytes(self, data):
+		'''
+		Open the file in bytes mode, write to it, and close the file.
+		'''
+
+		view = memoryview(data)
+		with self.open(mode = 'wb') as f:
+			return f.write(view)
+
+	## Reading directories ##
+
+	@abc.abstractmethod
+	def iterdir(self):
+		'''Yield path objects of the directory contents.
+        The children are yielded in arbitrary order, and the special entries '.' and '..' are not included.
+		'''
+
+		raise NotImplementedError('iterdir')
+
+	@abc.abstractmethod
+	def glob(self, pattern, *, case_sensitive = None):
+		'''Iterate over this subtree and yield all existing files (of any kind, including directories) matching the given relative pattern.
+		'''
+
+		raise NotImplementedError('glob')
+
+	@abc.abstractmethod
+	def rglob(self, pattern, *, case_sensitive = None):
+		'''Recursively yield all existing files (of any kind, including directories) matching the given relative pattern, anywhere in this subtree.
+		'''
+
+		raise NotImplementedError('rglob')
+
+	@abc.abstractmethod
+	def walk(self, top_down = True, on_error = None, follow_symlinks = False):
+		'''Walk the directory tree from this directory, similar to os.walk().
+		'''
+
+		raise NotImplementedError('walk')
+
+	## Creating files and directories ##
+
+	@abc.abstractmethod
+	def touch(self, mode = 0o666, exist_ok = True):
+		'''Create this file with the given access mode, if it doesn't exist.
+		'''
+
+		raise NotImplementedError('touch')
+
+	@abc.abstractmethod
+	def mkdir(self, mode = 0o777, parents = False, exist_ok = False):
+		'''Create a new directory at this given path.
+		'''
+
+		raise NotImplementedError('mkdir')
+
+	@abc.abstractmethod
+	def symlink_to(self, target, target_is_directory = False):
+		'''Make this path a symlink pointing to the target path. Note the order of arguments (link, target) is the reverse of os.symlink.
+		'''
+
+		raise NotImplementedError('symlink_to')
+
+	@abc.abstractmethod
+	def hardlink_to(self, target):
+		'''Make this path a hard link pointing to the same file as *target*. Note the order of arguments (self, target) is the reverse of os.link's.
+		'''
+
+		raise NotImplementedError('hardlink_to')
+
+	## Renaming and deleting ##
+
+	@abc.abstractmethod
+	def rename(self, target):
+		'''Rename this file or directory to the given target, and return a new Path instance pointing to target.
+		'''
+
+		raise NotImplementedError('rename')
+
+	@abc.abstractmethod
+	def replace(self, target):
+		'''Rename this file or directory to the given target, and return a new Path instance pointing to target.
+		If target points to an existing file or empty directory, it will be unconditionally replaced. The target path may be absolute or relative. Relative paths are interpreted relative to the current working directory, not the directory of the Path object.
+		'''
+
+		raise NotImplementedError('replace')
+
+	@abc.abstractmethod
+	def unlink(self, missing_ok = False):
+		'''Remove this file or symbolic link.
+		If the path points to a directory, use Path.rmdir() instead. If missing_ok is false (the default), FileNotFoundError is raised if the path does not exist. If missing_ok is true, FileNotFoundError exceptions will be ignored (same behavior as the POSIX rm -f command).
+		'''
+
+		raise NotImplementedError('unlink')
+
+	@abc.abstractmethod
+	def rmdir(self):
+		'''Remove this directory. The directory must be empty.
+		'''
+
+		raise NotImplementedError('rmdir')
+
+	## Other methods ##
+
+	@abc.abstractclassmethod
+	def cwd(self):
+		'''Return a new path pointing to the current working directory
+		'''
+
+		raise NotImplementedError('cwd')
+
+	@abc.abstractclassmethod
+	def home(cls):
+		'''User home
+		Return a new path object representing the user’s home directory. If the home directory can’t be resolved, RuntimeError is raised.
+		'''
+
+		raise NotImplementedError('home')
+
+	@abc.abstractmethod
+	def chmod(self, mode, *ignoring, follow_symlinks = True):
+		'''Change the file mode and permissions
+		This method normally follows symlinks. Some Unix flavours support changing permissions on the symlink itself; on these platforms you may add the argument follow_symlinks = False, or use lchmod().
+		'''
+
+		raise NotImplementedError('chmod')
+
+	@abc.abstractmethod
+	def expanduser(self):
+		'''Return a new path with expanded ~ and ~user constructs. If a home directory can’t be resolved, RuntimeError is raised.
+		'''
+
+		raise NotImplementedError('expanduser')
+
+	@abc.abstractmethod
+	def group(self):
+		'''Return the name of the group owning the file. KeyError is raised if the file’s gid isn’t found in the system database.
+		'''
+
+		raise NotImplementedError('group')
+
+	def lchmod(self, mode):
+		'''
+		Like chmod(), except if the path points to a symlink, the symlink's permissions are changed, rather than its target's.
+		'''
+
+		self.chmod(mode, follow_symlinks = False)
+
+	@abc.abstractmethod
+	def owner(self):
+		'''Return the name of the user owning the file. KeyError is raised if the file’s uid isn’t found in the system database.
+		'''
+
+		raise NotImplementedError('owner')
+
+	@abc.abstractmethod
+	def readlink(self):
+		'''Return the path to which the symbolic link points
+		'''
+
+		raise NotImplementedError('readlink')
+
+	@abc.abstractmethod
+	def absolute(self):
+		'''Make the path absolute, without normalization or resolving symlinks. Returns a new path object.
+		'''
+
+		raise NotImplementedError('absolute')
+
+	@abc.abstractmethod
+	def resolve(self, strict = False):
+		'''Make the path absolute, resolving any symlinks. A new path object is returned.
+		'''
+
+		raise NotImplementedError('resolve')
+
 
 class BaseOSPath(BasePath):
-	'''
+	'''Further implementation of BasePath for local filesystems
 	'''
 
 	_pathmod = None
