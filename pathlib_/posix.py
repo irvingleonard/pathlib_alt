@@ -7,9 +7,8 @@ This submodule contains the specifics for POSIX systems.
 
 import logging
 
-from ._base import BaseOSPath, BasePurePath
-
-__version__ = '2023.1'
+from ._base import BasePurePath, __version__
+from ._local import BaseOSPath
 
 LOGGER = logging.getLogger(__name__)
 
