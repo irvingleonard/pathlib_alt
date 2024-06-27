@@ -8,13 +8,11 @@ This submodule implements the basis of the protocol (abstract and base classes).
 import abc
 import io
 import logging
-import os
-import stat
 
 __version__ = '2023.1'
 
 LOGGER = logging.getLogger(__name__)
-	
+
 
 class BasePurePath(tuple):
 	'''Base class for manipulating paths without I/O.
@@ -372,7 +370,7 @@ class BasePath(abc.ABC):
 	'''Base class for I/O enabled methods.
 	BasePath implements the diverse methods that do I/O.
 
-	This class is mostly abstract and defines the rest of the public interface of a concrete Path (in addition to BasePurePath). Only a few high level methods are implemented and the rest (the most part of the class) are abstract and should be overriden by the child classes. Some mechanisms, like all the stat related methods, are not truly portable (not applicable to virtual filesystems, for example) so they're not implemented here. The enhancement of this class for local filesystems is called BaseOSPath.
+	This class is mostly abstract and defines the rest of the public interface of a concrete Path (in addition to BasePurePath). Only a few high level methods are implemented and the rest (the most part of the class) are abstract and should be overriden by the child classes. Some mechanisms, like all the stat related methods, are not truly portable (not applicable to virtual filesystems, for example) so they're not implemented here. The enhancement of this class for local filesystems is called _local.BaseOSPath.
 	'''
 
 	## Querying file type and status ##
@@ -384,7 +382,6 @@ class BasePath(abc.ABC):
 
 		raise NotImplementedError('stat')
 
-	@abc.abstractmethod
 	def lstat(self):
 		'''
 		Like stat(), except if the path points to a symlink, the symlink's status information is returned, rather than its target's.
@@ -395,7 +392,7 @@ class BasePath(abc.ABC):
 	@abc.abstractmethod
 	def exists(self, *, follow_symlinks = True):
 		''' Whether this path exists.
-        This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
+		This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
 		'''
 
 		raise NotImplementedError('exists')
@@ -521,7 +518,7 @@ class BasePath(abc.ABC):
 	@abc.abstractmethod
 	def iterdir(self):
 		'''Yield path objects of the directory contents.
-        The children are yielded in arbitrary order, and the special entries '.' and '..' are not included.
+		The children are yielded in arbitrary order, and the special entries '.' and '..' are not included.
 		'''
 
 		raise NotImplementedError('iterdir')
@@ -682,61 +679,3 @@ class BasePath(abc.ABC):
 		'''
 
 		raise NotImplementedError('resolve')
-
-
-class BaseOSPath(BasePath):
-	'''Further implementation of BasePath for local filesystems
-	'''
-
-	_pathmod = None
-
-	@classmethod
-	def _call_os_function(cls, function, *args, **kwargs):
-		'''
-		Forward a call to a function in the os module
-		'''
-
-		if hasattr(os, function):
-			return getattr(os, function)(*args, **kwargs)
-		else:
-			raise NotImplementedError('The current "os" module does not contain the required function: {}'.format(function))
-
-	def _call_pathmod_function(self, function, *args, **kwargs):
-		'''
-		Forward a call to a function in the current "pathmod" module
-		'''
-
-		pass
-
-	@classmethod
-	def home(cls):
-		'''
-		Return a new path pointing to expanduser('~').
-		'''
-
-		return cls('~').expanduser()
-
-	def open(self, mode = 'r', buffering = -1, encoding = None, errors = None, newline = None):
-		'''
-		Open the file pointed by this path and return a file object, as the built-in open() function does.
-		'''
-
-		if "b" not in mode:
-			encoding = io.text_encoding(encoding)
-		return io.open(self, mode, buffering, encoding, errors, newline)
-
-	def samefile(self, other_path):
-		'''
-		Return whether other_path is the same or not as this file (as returned by os.path.samefile()).
-		'''
-
-		other_stat = self.convert_path(other_path).stat()
-		self_stat = self.stat()
-		return (self_stat.st_ino == other_stat.st_ino) and (self_stat.st_dev == other_stat.st_dev)
-
-	def stat(self, *, follow_symlinks = True):
-		'''
-		Return the result of the stat() system call on this path, like os.stat() does.
-		'''
-
-		return os.stat(self, follow_symlinks = follow_symlinks)
