@@ -1,9 +1,9 @@
 #!python
-'''A reimplementation of the python standard library's pathlib.
-The original pathlib module seems to revolve around the idea that the path is a string, and then it can't decide if the paths are inmutable or not. This module works with a different paradigm: a path is a sequence of individual components divided by a "separator" and such sequence is inmutable.
+"""A reimplementation of the python standard library's pathlib.
+The original pathlib module seems to revolve around the idea that the path is a string, and then it can't decide if the paths are immutable or not. This module works with a different paradigm: a path is a sequence of individual components divided by a "separator" and such sequence is immutable.
 
 This submodule contains the specifics for the Windows systems.
-'''
+"""
 
 import logging
 
@@ -15,6 +15,9 @@ LOGGER = logging.getLogger(__name__)
 
 
 class PureWindowsPath(BasePurePath):
+	"""
+	
+	"""
 
 	CASE_SENSITIVE = False
 	DRIVE_SUPPORTED = True
@@ -24,7 +27,7 @@ class PureWindowsPath(BasePurePath):
 
 	@classmethod
 	def _parse_path(cls, path):
-		'''Local parsing logic
+		"""Local parsing logic
 		Should implement whatever logic is needed to parse the provided path string into a tuple (drive, root, tail)
 
 		Drive and/or root could be empty, but both should be strings. Tail should be a sequence (could be empty too).
@@ -35,7 +38,7 @@ class PureWindowsPath(BasePurePath):
 		References:
 		- https://learn.microsoft.com/en-us/windows/win32/fileio/naming-a-file
 		- https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
-		'''
+		"""
 
 		path = path.replace('/', cls.SEPARATOR) # This is a weird backwards compatibility reason. At the end of the day it seems that Windows internally converts it to its preferred separator.
 		if path[:1] == cls.SEPARATOR:
@@ -84,9 +87,9 @@ class PureWindowsPath(BasePurePath):
 
 	@classmethod
 	def _validate_tail_parts(cls, *tail_parts):
-		'''Validate the name of the provided tail parts
+		"""Validate the name of the provided tail parts
 		Check each part's name against the list of invalid characters. It assumes the last part is always a file, which might not be the case sometimes, if the path points to a directory, for example, but the BasePurePath is incapable of knowing that reliably.
-		'''
+		"""
 
 		super()._validate_tail_parts(*tail_parts)
 
@@ -97,21 +100,25 @@ class PureWindowsPath(BasePurePath):
 		return True
 
 	def as_posix(self):
-		'''Return the string representation of the path with forward (/) slashes.'''
+		"""
+		Return the string representation of the path with forward (/) slashes.
+		"""
 
 		return str(self).replace(self.SEPARATOR, '/')
 
 	def as_uri(self):
-		'''Return the path as a URI.
+		"""Return the path as a URI.
 		The logic is local, to be defined by the path syntax.
-		'''
+		"""
 
 		if not self.is_absolute():
 			raise ValueError("relative path can't be expressed as a file URI")
 		return 'file://' + self.as_posix()
 
 	def is_reserved(self):
-		'''Return True if the path contains one of the special names reserved by the system, if any.'''
+		"""
+		Return True if the path contains one of the special names reserved by the system, if any.
+		"""
 
 		if self.pure_stem:
 			if frozenset((self.pure_stem if self.CASE_SENSITIVE else self.pure_stem.upper(),)) & self.RESERVED_NAMES:
