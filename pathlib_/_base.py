@@ -610,8 +610,9 @@ class BasePath(ABC):
 
 	## Other methods ##
 
+	@classmethod
 	@abstractmethod
-	def cwd(self):
+	def cwd(cls):
 		"""
 		Return a new path pointing to the current working directory
 		"""
