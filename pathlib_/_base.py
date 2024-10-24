@@ -6,12 +6,13 @@ This submodule implements the basis of the protocol (abstract and base classes).
 """
 
 from abc import ABC, abstractmethod
-from io import open as io_open, text_encoding as io_text_encoding
+from io import text_encoding as io_text_encoding
 from logging import getLogger
 import os
 
 __version__ = '2023.1'
 
+JOINPATH_INSANE_BEHAVIOR = False
 LOGGER = getLogger(__name__)
 	
 
@@ -30,8 +31,7 @@ class BasePurePath(tuple):
 
 	DRIVE_SUPPORTED = False
 	INVALID_PATH_CHARS = frozenset()
-	JOINPATH_INSANE_BEHAVIOR = False
-	RESERVED_NAMES = frozenset()
+	PARENT_CHARACTER_ENTRY = '..'
 	SEPARATOR = '/'
 	SUFFIX_SEPARATOR = '.'
 
@@ -77,7 +77,7 @@ class BasePurePath(tuple):
 
 		raise AttributeError(name)
 
-	def __new__(cls, *args, drive = None, root = None, tail = None):
+	def __new__(cls, *args, drive=None, root=None, tail=None):
 		"""Creation magic
 		Getting all the details to build the final object.
 
@@ -112,7 +112,7 @@ class BasePurePath(tuple):
 		path = super().__new__(cls, ([anchor] if anchor else []) + tail)
 		path.parts = tuple(([anchor] if anchor else []) + [part for part in tail if part])
 
-		path.drive, path.root, path.anchor, path._tail = drive, root, anchor, tail
+		path.drive, path.root, path.anchor, path.tail = drive, root, anchor, tail
 		path.LOCAL_PARSING = {
 			('name', 'stem', 'suffix', 'pure_stem', 'suffixes') : path._parse_name,
 			('parent', 'parents') : path._get_parents,
@@ -157,7 +157,7 @@ class BasePurePath(tuple):
 		try:
 			return self._str
 		except AttributeError:
-			str_value = ((self.anchor if self.anchor else '') + self.SEPARATOR.join(self._tail)) or '.'
+			str_value = ((self.anchor if self.anchor else '') + self.SEPARATOR.join(self.tail)) or '.'
 			str_value.encode('unicode-escape').decode()
 			self._str = str_value
 			return self._str
@@ -175,32 +175,35 @@ class BasePurePath(tuple):
 	@classmethod
 	def _get_parents(cls, path_instance):
 		"""Get the parents of a certain path instance
-		It should be usable by all applications but it could be overriden if needed.
+		The default implementation should work for most cases. Child classes can override it for custom behavior. New implementations should have the same signature and return the same structure.
+		
+		:param path_instance: the Path instance to get the parents from
+		:return: currently a tuple of ('parent', 'parents') where parent is the direct parent and parents is the list from the closest to the furthest parent in the tree. The current expected result is the matching key on the cls.LOCAL_PARSING dictionary.
 		"""
 
-		parents = []
-		if path_instance._tail:
-			for i in range(len(path_instance._tail) - 1, 0, -1):
-				parents.append(cls(drive = path_instance.drive, root = path_instance.root, tail = path_instance._tail[:i]))
+		parent, parents = path_instance, []
+		if path_instance.tail:
+			for i in range(len(path_instance.tail) - 1, 0, -1):
+				parents.append(cls(drive=path_instance.drive, root=path_instance.root, tail=path_instance.tail[:i]))
 			if path_instance.anchor:
-				parents.append(cls(drive = path_instance.drive, root = path_instance.root, tail = []))
+				parents.append(cls(drive=path_instance.drive, root=path_instance.root, tail=[]))
 			else:
 				parents.append(cls())
 			if len(parents):
 				parent = parents[0]
-		else:
-			parent = path_instance
 
 		return parent, parents
 
 	@staticmethod
 	def _parse_name(path_instance):
 		"""Local name parsing logic
-		This implementation should work most of the time, but it can be overriden if needed.
-		New implementations should return the same tuple, though: name, stem, suffix, pure_stem, suffixes
+		This implementation should work for most cases.Child classes could still override it for custom behavior. New implementations should have the same signature and return the same structure.
+		
+		:param path_instance: the Path instance to get the name (and other values) for
+		:return: currently a tuple of ('name', 'stem', 'suffix', 'pure_stem', 'suffixes') where name is the final component of the path (or some special case value), stem + suffix = name, and pure_stem + ''.join(suffixes) = name. The up-to-date expected result structure can be found in the matching key on the cls.LOCAL_PARSING dictionary.
 		"""
 
-		name = path_instance._tail[-1] if path_instance._tail else ''
+		name = path_instance.tail[-1] if path_instance.tail else ''
 		if (not name) or name.endswith(path_instance.SUFFIX_SEPARATOR):
 			suffixes = []
 		else:
@@ -217,10 +220,10 @@ class BasePurePath(tuple):
 		"""Local parsing logic
 		Should implement whatever logic is needed to parse the provided path string into a tuple (drive, root, tail)
 
-		Drive and/or root could be empty, but both should be strings. Tail should be a sequence (could be empty too).
-		The empty path would yield ('', '', [])
-
 		The method should not try to simplify the path (resolve globbing, remove separator repetitions, etc.). The class must be able to recreate the original values, which becomes impossible if any part of it is removed here.
+		
+		:param path: the "path" provided to build the instance. Should be a string or better.
+		:return: a tuple (drive, root, tail) where the empty result would be ('', '', []). The drive and root values are the "sections" of the anchor, and tail is a list containing all the other "parts" for the path.
 		"""
 
 		raise NotImplementedError('_parse_path()')
@@ -229,6 +232,9 @@ class BasePurePath(tuple):
 	def _validate_tail_parts(cls, *tail_parts):
 		"""Validate the name of the provided tail parts
 		Check each part's name against the list of invalid characters and raises ValueError on a match.
+		
+		:param tail_parts: The parts of the tail to validate
+		:return bool: True if all are valid, False otherwise.
 		"""
 
 		if not tail_parts:
@@ -241,113 +247,182 @@ class BasePurePath(tuple):
 		return True
 
 	def as_posix(self):
-		"""Return the string representation of the path with forward (/) slashes."""
-
-		raise NotImplementedError('as_posix()')
-
-	def as_uri(self):
-		"""Return the path as a URI.
-		The logic is local, to be defined by the path syntax.
+		"""As POSIX
+		Return the string representation of the path with forward (/) slashes. Not a great method but kept for full compatibility.
+		
+		:return str: A string representing the supposedly "POSIX equivalent" of this path.
 		"""
 
-		raise NotImplementedError('as_uri()')
+		raise NotImplementedError('as_posix()')
 
 	@classmethod
 	def convert_path(cls, path):
 		"""Convert the provided path to an object of this class.
 		Very thin layer, just an optimization to avoid parsing the same object several times. It basically confirms that the path is in the right "format".
+		
+		:param path: The "path" to create the instance
+		:return cls: An instance of "cls" created out of "path"
 		"""
 
 		return path if isinstance(path, cls) else cls(path)
+	
+	def full_match(self, pattern, *, case_sensitive=None):
+		"""Globbing with the pattern language
+		Match this path against the provided glob-style pattern.
+
+		:param str pattern: The pattern, following the "pattern language"
+		:param bool? case_sensitive: True will make comparisons case-sensitive, False will do the opposite. None (the default) will "guess" the right value from the system.
+		:return bool: True if matching is successful, False otherwise.
+		"""
+		
+		# ToDo: implement!
+		raise NotImplementedError('full_match()')
 
 	def is_absolute(self):
-		"""True if the path is absolute. A path is considered absolute if it has both a root and a drive (if supported)."""
+		"""Is it absolute?
+		True if the path is absolute. A path is considered absolute if it has both a root and a drive (if supported).
+		
+		:return bool: True if it has root and drive (if supported), False otherwise.
+		"""
 
 		return (bool(self.drive) if self.DRIVE_SUPPORTED else True) and bool(self.root)
 
 	def is_relative_to(self, other):
-		"""Return True if the path is relative to another path or False."""
+		"""Is it relative to "other"?
+		Check if the path is relative to another path.
+		
+		:param other: The potentially parent path
+		:return bool: True if it's a parent, False otherwise
+		"""
 
 		other = self.convert_path(other)
 		return other == self or other in self.parents
 
-	def is_reserved(self):
-		"""Return True if the path contains one of the special names reserved by the system, if any."""
-
-		return self.name in self.RESERVED_NAMES
-
 	def joinpath(self, *pathsegments):
-		"""Combine this path with one or several arguments, and return a new subpath.
+		"""Join path
+		Combine this path with one or several arguments, and return a new subpath.
 
 		The JOINPATH_INSANE_BEHAVIOR (default upstream behavior, currently not implemented) would return a totally different path if one of the arguments is anchored; actually, it would replace the path with the latest anchored argument joined to the rest (and would drop everything else, including the current content and all the earliest arguments).
 		Ex: ('/', 'tmp').joinpath('esdferts-asf328', '/usr/local/bin/my_script.sh', '/etc', 'shadow') would yield ('/', 'etc', 'shadow')
+		
+		:param pathsegments: The multiple segments to join into this path
+		:return type(self): A new instance of this type of path with the extra segments appended
 		"""
 
-		tails = []
+		drive, root, tail = self.drive, self.root, list(self.tail)
 		for path in pathsegments:
 			path = self.convert_path(path)
-			if self.JOINPATH_INSANE_BEHAVIOR:
-				raise NotImplementedError('For you to implement here: JOINPATH_INSANE_BEHAVIOR')
-			elif path.anchor():
-				raise ValueError("Can't join an anchored path")
+			if path.anchor:
+				if JOINPATH_INSANE_BEHAVIOR:
+					if (path.drive == self.drive) and not path.root:
+						tail.extend(list(path.tail))
+					else:
+						drive, root, tail = path.drive, path.root, list(path.tail)
+				else:
+					raise ValueError("Can't join an anchored path")
 			else:
-				tails.extend(list(path._tail))
+				tail.extend(list(path.tail))
 
-		return self.__class__(drive = self.drive, root = self.root, tail = self._tail + tails)
+		return self.__class__(drive=drive, root=root, tail=tail)
 
-	def match(self, pattern):
-		"""Local globbing logic
-		Should follow your system's globbing features.
+	def match(self, pattern, *, case_sensitive=None):
+		"""Globbing with the pattern language
+		Match this path against the provided non-recursive glob-style pattern. Empty patterns aren't allowed, recursive wildcard ("**") becomes "*", and relative patterns will trigger the matching to be done from the right.
+
+		:param str pattern: The pattern, following the "pattern language".
+		:param bool? case_sensitive: True will make comparisons case-sensitive, False will do the opposite. None (the default) will "guess" the right value from the system.
+		:return bool: True if matching is successful, False otherwise.
 		"""
-
+		
+		# ToDo: implement!
 		raise NotImplementedError('match()')
 
-	def relative_to(self, other):
-		"""Return the relative path to another path
-
-		If the operation is not possible (because this is not related to the other path), raise ValueError.
+	def relative_to(self, other, walk_up=False):
+		"""Relative to "other" path
+		Compute a version of this path relative to the path presented by "other". If it's impossible, ValueError is raised.
+		
+		:param other: The supposed parent path
+		:param bool walk_up: when true, "other" can be a sibling and the result will contain enough self.PARENT_CHARACTER_ENTRY components to reach the common ancestor.
+		:return type(self): A new instance of this type of path with the relative path
 		"""
 
 		other = self.convert_path(other)
-		if not self.is_relative_to(other):
-			raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
+		if self.is_relative_to(other):
+			new_tail = self.tail[len(other.tail):]
+		else:
+			if walk_up:
+				new_tail = None
+				for i in range(len(other.parents)):
+					if other.parents[i] in self.parents:
+						new_tail = [self.PARENT_CHARACTER_ENTRY] * (i + 1) + self.relative_to(other.parents[i]).tail
+						break
+				if new_tail is None:
+					raise ValueError(f"{str(self)!r} is not related to {str(other)!r}")
+			else:
+				raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
 
-		return self.__class__(drive = '', root = '', tail = self._tail[len(other._tail):])
+		return self.__class__(drive='', root='', tail=new_tail)
 
 	def with_name(self, name):
-		"""Return a similar path with the file name replaced.
+		"""Different name
+		Create a similar path with the name component replaced (the last part of the path).
 
 		It won't work on paths without names (like the root)
 		The name can't be empty, nor have the SEPARATOR in it, nor be the "dot" (".")
+		
+		:param name: The name for the new path instance
+		:return type(self): A new instance of this type of path with the new name
 		"""
 
 		if not self.name:
 			raise ValueError("%r has an empty name" % (self,))
 		self._validate_tail_parts(name)
 
-		return self.__class__(drive = self.drive, root = self.root, tail = self._tail[:-1] + [name])
+		return self.__class__(drive=self.drive, root=self.root, tail=(self.tail[:-1] + [name]))
 
 	def with_pure_stem(self, pure_stem):
-		"""Return a similar path with the pure_stem replaced."""
+		"""Different pure_stem
+		Create a similar path with the pure_stem replaced.
+		
+		:param pure_stem: The pure_stem for the new path instance
+		:return type(self): A new instance of this type of path with the new pure_stem
+		"""
 
 		if (not pure_stem) or (pure_stem[-1] == self.SUFFIX_SEPARATOR):
 			raise ValueError('Invalid pure_stem "{}"'.format(pure_stem))
 		if self.SUFFIX_SEPARATOR in pure_stem.lstrip(self.SUFFIX_SEPARATOR):
 			raise ValueError('Provided pure_stem is not pure, it contains suffixes "{}"'.format(pure_stem))
 		return self.with_name(pure_stem + ''.join(self.suffixes))
+	
+	@classmethod
+	def with_segments(cls, *pathsegments):
+		"""Legacy method
+		Part of the original implementation, kept around for full compatibility
+		
+		:param pathsegments: Different components to form a new/combined path
+		:return type(self): A new instance of this type of path out of the provided components
+		"""
+		
+		return cls(*pathsegments)
 
 	def with_stem(self, stem):
-		"""Return a similar path with the stem replaced."""
+		"""Different stem
+		Create a similar path with the stem replaced.
+		
+		:param stem: The stem for the new path instance
+		:return type(self): A new instance of this type of path with the new stem
+		"""
 
 		if not stem:
 			raise ValueError('Invalid stem "{}"'.format(stem))
 		return self.with_name(stem + self.suffix)
 
 	def with_suffix(self, suffix):
-		"""Return a similar path with the file suffix replaced.
-
-		If the path has no suffix, add given suffix.
-		If the given suffix is an empty string, remove the suffix from the path.
+		"""Different suffix
+		Create a similar path with the suffix replaced. If the path has no suffix, add given suffix. If the given suffix is an empty string, remove the suffix from the path.
+		
+		:param suffix: The suffix for the new path instance
+		:return type(self): A new instance of this type of path with the new suffix
 		"""
 
 		if suffix and not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
@@ -355,10 +430,11 @@ class BasePurePath(tuple):
 		return self.with_name(self.stem + suffix)
 
 	def with_suffixes(self, *suffixes):
-		"""Return a similar path with the file suffixes replaced.
-
-		If the path has no suffixes, add given suffixes.
-		If no suffixes are given, remove the suffixes from the path.
+		"""Different suffixes
+		Create a similar path with the suffixes replaced. If the path has no suffixes, add given suffixes. If no suffixes are given, remove the suffixes from the path.
+		
+		:param suffixes: The list of suffixes for the new path instance
+		:return type(self): A new instance of this type of path with the new suffixes
 		"""
 
 		for suffix in suffixes:
@@ -373,11 +449,113 @@ class BasePath(ABC):
 
 	This class is mostly abstract and defines the rest of the public interface of a concrete Path (in addition to BasePurePath). Only a few high level methods are implemented and the rest (the most part of the class) are abstract and should be overriden by the child classes. Some mechanisms, like all the stat related methods, are not truly portable (not applicable to virtual filesystems, for example) so they're not implemented here. The enhancement of this class for local filesystems is called BaseOSPath.
 	"""
+	
+	RESERVED_ABSOLUTE_PATHS = frozenset()
+	RESERVED_NAMES = frozenset()
+	RESERVED_RELATIVE_PATHS = frozenset()
+	
+	## Enhanced implementations ##
+	
+	def is_reserved(self):
+		"""Is it reserved?
+		Check if the path is somehow reserved. Checks the name, the path as relative, and the path as absolute. In the original module this method lives in the PurePath class. It was moved here because it was extended to actually check for absolute paths that are reserved (hence, an "impure" operation).
 
+		:return bool: True if the path contains one of the special names reserved by the system, or is a reserved relative path, or is a reserved absolute path
+		"""
+		
+		return (self.name in self.RESERVED_NAMES) or (self in self.RESERVED_RELATIVE_PATHS) or (self.absolute() in self.RESERVED_ABSOLUTE_PATHS)
+	
+	## Parsing and generating URIs ##
+	
+	@classmethod
+	def from_uri(cls, uri):
+		"""From URI
+		Return a new path object from parsing a "file" URI.
+		
+		:param uri: The URI to parse
+		:return type(self): A new instance of this type of path based out of the URI
+		"""
+		
+		raise NotImplementedError('from_uri()')
+	
+	def as_uri(self):
+		"""As URI
+		Represent the path as a "file" URI.
+
+		:return bool: A string representing the supposedly "file URI" for this path.
+		"""
+		
+		raise NotImplementedError('as_uri()')
+	
+	## Expanding and resolving paths ##
+	
+	@classmethod
+	@abstractmethod
+	def home(cls):
+		"""User home
+		Resolves the user’s home directory path. If the home directory can’t be resolved, RuntimeError is raised.
+		
+		:return type(cls): A new instance of this type pointing to the current user's home directory
+		"""
+		
+		raise NotImplementedError('home')
+	
+	@abstractmethod
+	def expanduser(self):
+		"""Expand user
+		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved, RuntimeError is raised.
+		
+		:return type(cls): A new instance of this type with the user's home directory expanded
+		"""
+		
+		raise NotImplementedError('expanduser')
+	
+	@classmethod
+	@abstractmethod
+	def cwd(cls):
+		"""Current working directory
+		Resolve the current working directory.
+		
+		:return type(cls): A new instance of this type pointing to the current working directory
+		"""
+		
+		raise NotImplementedError('cwd')
+	
+	@abstractmethod
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+		
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		raise NotImplementedError('absolute')
+	
+	@abstractmethod
+	def resolve(self, strict=False):
+		"""Resolve the absolute path
+		Make the path absolute not only with an anchor but in the underlying filesystem by resolving upwards movements and following symlinks.
+		
+		:param bool? strict: If False, it will be a best effort process. Non-existing branches and symlinks loops will break the process and non-resolved part will be appended as-is, "assuming" that it will be there. When True, such problems will raise an OSError instead.
+		:return type(cls): A new instance of this type which is absolute.
+		"""
+		
+		raise NotImplementedError('resolve')
+	
+	@abstractmethod
+	def readlink(self):
+		"""Resolve link
+		Resolves the path to which the symbolic link points
+		
+		:return type(cls): A new instance of this type pointing to the symlink's target.
+		"""
+		
+		raise NotImplementedError('readlink')
+	
 	## Querying file type and status ##
 
 	@abstractmethod
-	def stat(self, *, follow_symlinks = True):
+	def stat(self, *, follow_symlinks=True):
 		"""Return the result of the stat() system call on this path, like os.stat() does.
 		"""
 
@@ -389,10 +567,10 @@ class BasePath(ABC):
 		Like stat(), except if the path points to a symlink, the symlink's status information is returned, rather than its target's.
 		"""
 
-		return self.stat(follow_symlinks = False)
+		return self.stat(follow_symlinks=False)
 
 	@abstractmethod
-	def exists(self, *, follow_symlinks = True):
+	def exists(self, *, follow_symlinks=True):
 		""" Whether this path exists.
         This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
 		"""
@@ -400,14 +578,14 @@ class BasePath(ABC):
 		raise NotImplementedError('exists')
 
 	@abstractmethod
-	def is_file(self):
+	def is_file(self, follow_symlinks=True):
 		"""Whether this path is a regular file (also True for symlinks pointing to regular files).
 		"""
 
 		raise NotImplementedError('is_file')
 
 	@abstractmethod
-	def is_dir(self):
+	def is_dir(self, follow_symlinks=True):
 		"""Whether this path is a directory.
 		"""
 
@@ -472,19 +650,19 @@ class BasePath(ABC):
 	## Reading and writing files ##
 
 	@abstractmethod
-	def open(self, mode = 'r', buffering = -1, encoding = None, errors = None, newline = None):
+	def open(self, mode='r', buffering=-1, encoding=None, errors=None, newline=None):
 		"""Open the file pointed to by this path and return a file object, as the built-in open() function does.
 		"""
 
 		raise NotImplementedError('open')
 
-	def read_text(self, encoding = None, errors = None):
+	def read_text(self, encoding=None, errors=None, newline=None):
 		"""
 		Open the file in text mode, read it, and close the file.
 		"""
 
 		encoding = io_text_encoding(encoding)
-		with self.open(mode = 'r', encoding = encoding, errors = errors) as f:
+		with self.open(mode='r', encoding=encoding, errors=errors, newline=newline) as f:
 			return f.read()
 
 	def read_bytes(self):
@@ -492,10 +670,10 @@ class BasePath(ABC):
 		Open the file in bytes mode, read it, and close the file.
 		"""
 
-		with self.open(mode = 'rb') as f:
+		with self.open(mode='rb') as f:
 			return f.read()
 
-	def write_text(self, data, encoding = None, errors = None, newline = None):
+	def write_text(self, data, encoding=None, errors=None, newline=None):
 		"""
 		Open the file in text mode, write to it, and close the file.
 		"""
@@ -503,7 +681,7 @@ class BasePath(ABC):
 		if not isinstance(data, str):
 			raise TypeError('data must be str, not %s' % data.__class__.__name__)
 		encoding = io_text_encoding(encoding)
-		with self.open(mode = 'w', encoding = encoding, errors = errors, newline = newline) as f:
+		with self.open(mode='w', encoding=encoding, errors=errors, newline=newline) as f:
 			return f.write(data)
 
 	def write_bytes(self, data):
@@ -512,7 +690,7 @@ class BasePath(ABC):
 		"""
 
 		view = memoryview(data)
-		with self.open(mode = 'wb') as f:
+		with self.open(mode='wb') as f:
 			return f.write(view)
 
 	## Reading directories ##
@@ -526,21 +704,21 @@ class BasePath(ABC):
 		raise NotImplementedError('iterdir')
 
 	@abstractmethod
-	def glob(self, pattern, *, case_sensitive = None):
+	def glob(self, pattern, *, case_sensitive=None, recurse_symlinks=False):
 		"""Iterate over this subtree and yield all existing files (of any kind, including directories) matching the given relative pattern.
 		"""
 
 		raise NotImplementedError('glob')
 
 	@abstractmethod
-	def rglob(self, pattern, *, case_sensitive = None):
+	def rglob(self, pattern, *, case_sensitive=None, recurse_symlinks=False):
 		"""Recursively yield all existing files (of any kind, including directories) matching the given relative pattern, anywhere in this subtree.
 		"""
 
 		raise NotImplementedError('rglob')
 
 	@abstractmethod
-	def walk(self, top_down = True, on_error = None, follow_symlinks = False):
+	def walk(self, top_down=True, on_error=None, follow_symlinks=False):
 		"""Walk the directory tree from this directory, similar to os.walk().
 		"""
 
@@ -549,21 +727,21 @@ class BasePath(ABC):
 	## Creating files and directories ##
 
 	@abstractmethod
-	def touch(self, mode = 0o666, exist_ok = True):
+	def touch(self, mode=0o666, exist_ok=True):
 		"""Create this file with the given access mode, if it doesn't exist.
 		"""
 
 		raise NotImplementedError('touch')
 
 	@abstractmethod
-	def mkdir(self, mode = 0o777, parents = False, exist_ok = False):
+	def mkdir(self, mode=0o777, parents=False, exist_ok=False):
 		"""Create a new directory at this given path.
 		"""
 
 		raise NotImplementedError('mkdir')
 
 	@abstractmethod
-	def symlink_to(self, target, target_is_directory = False):
+	def symlink_to(self, target, target_is_directory=False):
 		"""Make this path a symlink pointing to the target path. Note the order of arguments (link, target) is the reverse of os.symlink.
 		"""
 
@@ -594,7 +772,7 @@ class BasePath(ABC):
 		raise NotImplementedError('replace')
 
 	@abstractmethod
-	def unlink(self, missing_ok = False):
+	def unlink(self, missing_ok=False):
 		"""Remove this file or symbolic link.
 		If the path points to a directory, use Path.rmdir() instead. If missing_ok is false (the default), FileNotFoundError is raised if the path does not exist. If missing_ok is true, FileNotFoundError exceptions will be ignored (same behavior as the POSIX rm -f command).
 		"""
@@ -608,79 +786,35 @@ class BasePath(ABC):
 
 		raise NotImplementedError('rmdir')
 
-	## Other methods ##
-
-	@classmethod
+	## Permissions and ownership ##
+	
 	@abstractmethod
-	def cwd(cls):
+	def owner(self, *, follow_symlinks=True):
+		"""Return the name of the user owning the file. KeyError is raised if the file’s uid isn’t found in the system database.
 		"""
-		Return a new path pointing to the current working directory
-		"""
-
-		raise NotImplementedError('cwd')
-
-	@classmethod
+		
+		raise NotImplementedError('owner')
+	
 	@abstractmethod
-	def home(cls):
-		"""User home
-		Return a new path object representing the user’s home directory. If the home directory can’t be resolved, RuntimeError is raised.
+	def group(self, *, follow_symlinks=True):
+		"""Return the name of the group owning the file. KeyError is raised if the file’s gid isn’t found in the system database.
 		"""
-
-		raise NotImplementedError('home')
+		
+		raise NotImplementedError('group')
 
 	@abstractmethod
-	def chmod(self, mode, *ignoring, follow_symlinks = True):
+	def chmod(self, mode, *, follow_symlinks=True):
 		"""Change the file mode and permissions
 		This method normally follows symlinks. Some Unix flavours support changing permissions on the symlink itself; on these platforms you may add the argument follow_symlinks = False, or use lchmod().
 		"""
 
 		raise NotImplementedError('chmod')
 
-	@abstractmethod
-	def expanduser(self):
-		"""Return a new path with expanded ~ and ~user constructs. If a home directory can’t be resolved, RuntimeError is raised.
-		"""
-
-		raise NotImplementedError('expanduser')
-
-	@abstractmethod
-	def group(self):
-		"""Return the name of the group owning the file. KeyError is raised if the file’s gid isn’t found in the system database.
-		"""
-
-		raise NotImplementedError('group')
-
 	def lchmod(self, mode):
 		"""
 		Like chmod(), except if the path points to a symlink, the symlink's permissions are changed, rather than its target's.
 		"""
 
-		self.chmod(mode, follow_symlinks = False)
+		self.chmod(mode, follow_symlinks=False)
 
-	@abstractmethod
-	def owner(self):
-		"""Return the name of the user owning the file. KeyError is raised if the file’s uid isn’t found in the system database.
-		"""
-
-		raise NotImplementedError('owner')
-
-	@abstractmethod
-	def readlink(self):
-		"""Return the path to which the symbolic link points
-		"""
-
-		raise NotImplementedError('readlink')
-
-	@abstractmethod
-	def absolute(self):
-		"""Make the path absolute, without normalization or resolving symlinks. Returns a new path object.
-		"""
-
-		raise NotImplementedError('absolute')
-
-	@abstractmethod
-	def resolve(self, strict = False):
-		"""Make the path absolute, resolving any symlinks. A new path object is returned.
-		"""
-
-		raise NotImplementedError('resolve')
+	
