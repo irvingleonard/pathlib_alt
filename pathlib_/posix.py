@@ -6,6 +6,7 @@ This submodule contains the specifics for POSIX systems.
 """
 
 from logging import getLogger
+import posixpath
 
 from ._base import BasePurePath, __version__
 from ._local import BaseOSPath
@@ -17,7 +18,9 @@ class PurePosixPath(BasePurePath):
 	"""
 	
 	"""
-
+	
+	parser = posixpath
+	
 	@classmethod
 	def _parse_path(cls, path):
 		"""Local parsing logic

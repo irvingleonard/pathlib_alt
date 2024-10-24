@@ -5,13 +5,14 @@ The original pathlib module seems to revolve around the idea that the path is a 
 This submodule contains the specifics for the Windows systems.
 """
 
-import logging
+from logging import getLogger
+import ntpath
 
 from ._base import BasePurePath
 
 __version__ = '2023.1'
 
-LOGGER = logging.getLogger(__name__)
+LOGGER = getLogger(__name__)
 
 
 class PureWindowsPath(BasePurePath):
@@ -24,6 +25,7 @@ class PureWindowsPath(BasePurePath):
 	RESERVED_NAMES = frozenset(['CON', 'PRN', 'AUX', 'NUL'] + ['COM{}'.format(i) for i in range(9)] + ['LPT{}'.format(i) for i in range(9)])
 	INVALID_PATH_CHARS = frozenset(('<', '>', ':', '"', '/', '|', '?', '*'))
 	SEPARATOR = '\\'
+	parser = ntpath
 
 	@classmethod
 	def _parse_path(cls, path):
