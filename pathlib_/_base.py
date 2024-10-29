@@ -28,7 +28,8 @@ class BasePurePath(tuple):
 	- name = stem + suffix   # working with a single extension
 	- name = pure_stem + ''.join(suffixes)   # working with multiple extensions
 	"""
-
+	
+	CASE_SENSITIVE = True
 	DRIVE_SUPPORTED = False
 	INVALID_PATH_CHARS = frozenset()
 	PARENT_CHARACTER_ENTRY = '..'
