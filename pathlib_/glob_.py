@@ -1,22 +1,23 @@
 #!python
 """
-The original pathlib module seems to revolve around the idea that the path is a string, and then it can't decide if the paths are immutable or not. This module works with a different paradigm: a path is a sequence of individual components divided by a "separator" and such sequence is immutable.
+Unix style pathname pattern expansion
 
-This submodule implements the basis of the protocol (abstract and base classes).
+This is a backport from newer versions of the module (currently Python 3.13.0).
 """
+
+import os.path
+import re
+
+from pathlib_.fnmatch_ import _translate as fnmatch_translate
 
 def translate(pat, *, recursive=False, include_hidden=False, seps=None):
 	"""Translate a pathname with shell wildcards to a regular expression.
 
-	If `recursive` is true, the pattern segment '**' will match any number of
-	path segments.
+	If `recursive` is true, the pattern segment '**' will match any number of path segments.
 
-	If `include_hidden` is true, wildcards can match path segments beginning
-	with a dot ('.').
+	If `include_hidden` is true, wildcards can match path segments beginning with a dot ('.').
 
-	If a sequence of separator characters is given to `seps`, they will be
-	used to split the pattern into segments and match path separators. If not
-	given, os.path.sep and os.path.altsep (where available) are used.
+	If a sequence of separator characters is given to `seps`, they will be used to split the pattern into segments and match path separators. If not given, os.path.sep and os.path.altsep (where available) are used.
 	"""
 	if not seps:
 		if os.path.altsep:
@@ -53,7 +54,7 @@ def translate(pat, *, recursive=False, include_hidden=False, seps=None):
 			if part:
 				if not include_hidden and part[0] in '*?':
 					results.append(r'(?!\.)')
-				results.extend(fnmatch._translate(part, f'{not_sep}*', not_sep))
+				results.extend(fnmatch_translate(part, f'{not_sep}*', not_sep))
 			if idx < last_part_idx:
 				results.append(any_sep)
 	res = ''.join(results)
