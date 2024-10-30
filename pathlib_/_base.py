@@ -8,7 +8,7 @@ This submodule implements the basis of the protocol (abstract and base classes).
 from abc import ABC, abstractmethod
 from io import text_encoding as io_text_encoding
 from logging import getLogger
-import os
+from os import fspath
 
 __version__ = '2023.1'
 
@@ -20,19 +20,19 @@ class BasePurePath(tuple):
 	"""Base class for manipulating paths without I/O.
 	BasePurePath represents a filesystem path and offers operations which don't imply any actual filesystem I/O.
 
-	This class expects the path to be a string or better (doesn't deal with bytes). It keeps 2 or more versions of the path around:
-	- the original value, that will be returned with str() and the components can be accessed as part of the actual object (you can get a copy by slicing it)
-	- the "simplified" value that consist of the very same value minus all the empty components, which will be returned by the os.fspath() protocol and the parts are available in the "parts" attribute.
+	This class expects the path to be a string or better (doesn't deal with bytes). It keeps two versions of the path:
+	- the original value, that will be returned with str() and the parts are available in the "parts" attribute (the "repr" logic uses this version).
+	- the "simplified" value that will depend on the local simplification logic, which will be returned by the os.fspath() protocol and the components can be accessed as part of the actual object (you can get a copy by slicing it)
+	By storing the simplified version on the underlying tuple it enables better comparisons since equivalent paths will be equal. The paths could also be normalized to ignore case differences, etc.
 
 	Added one main attribute called "pure_stem" which is the counterpart to "suffixes". This means that you could recreate the "name" attribute with:
 	- name = stem + suffix   # working with a single extension
 	- name = pure_stem + ''.join(suffixes)   # working with multiple extensions
 	"""
 	
-	CASE_SENSITIVE = True
 	DRIVE_SUPPORTED = False
 	INVALID_PATH_CHARS = frozenset()
-	PARENT_CHARACTER_ENTRY = '..'
+	INVALID_PATH_COMPONENTS = frozenset()
 	SEPARATOR = '/'
 	SUFFIX_SEPARATOR = '.'
 
@@ -55,9 +55,9 @@ class BasePurePath(tuple):
 			return self._fspath
 		except AttributeError:
 			if self.anchor:
-				fspath_value = self.anchor + self.SEPARATOR.join(self.parts[1:])
+				fspath_value = self.anchor + self.SEPARATOR.join(self[1:])
 			else:
-				fspath_value = self.SEPARATOR.join(self.parts)
+				fspath_value = self.SEPARATOR.join(self)
 			fspath_value.encode('unicode-escape').decode()
 			self._fspath = fspath_value
 			return self._fspath
@@ -98,7 +98,7 @@ class BasePurePath(tuple):
 					paths.extend(list(arg))
 				else:
 					try:
-						path = os.fspath(arg)
+						path = fspath(arg)
 					except TypeError:
 						path = arg
 					if not isinstance(path, str):
@@ -107,13 +107,14 @@ class BasePurePath(tuple):
 
 			drive, root, tail = cls._parse_path(cls.SEPARATOR.join(paths))
 
-		cls._validate_tail_parts(*tail)
 		anchor = drive + root
+		parts = tuple(([anchor] if anchor else []) + [part for part in tail if part])
+		cls._validate_parts(anchor, *tail)
+		simplified_tail = cls._simplify_tail(anchor, *tail)
 
-		path = super().__new__(cls, ([anchor] if anchor else []) + tail)
-		path.parts = tuple(([anchor] if anchor else []) + [part for part in tail if part])
+		path = super().__new__(cls, ([anchor] if anchor else []) + simplified_tail)
 
-		path.drive, path.root, path.anchor, path.tail = drive, root, anchor, tail
+		path.parts, path.drive, path.root, path.anchor, path.tail, path.simplified_tail = parts, drive, root, anchor, tail, simplified_tail
 		path.LOCAL_PARSING = {
 			('name', 'stem', 'suffix', 'pure_stem', 'suffixes') : path._parse_name,
 			('parent', 'parents') : path._get_parents,
@@ -228,9 +229,23 @@ class BasePurePath(tuple):
 		"""
 
 		raise NotImplementedError('_parse_path()')
+	
+	@staticmethod
+	def _simplify_tail(anchor='', *tail):
+		"""Simplify components
+		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence.
+		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'bar', 'baz')
+		
+		The default is a passthrough (do nothing).
+		
+		:param tail: the tail of the Path to simplify
+		:return: simplified version of the provided tail
+		"""
+		
+		return list(tail)
 
 	@classmethod
-	def _validate_tail_parts(cls, *tail_parts):
+	def _validate_parts(cls, anchor='', *tail):
 		"""Validate the name of the provided tail parts
 		Check each part's name against the list of invalid characters and raises ValueError on a match.
 		
@@ -238,12 +253,15 @@ class BasePurePath(tuple):
 		:return bool: True if all are valid, False otherwise.
 		"""
 
-		if not tail_parts:
+		if not tail:
 			return True
 
-		for part in tail_parts:
-			if frozenset(part) & (cls.INVALID_PATH_CHARS | frozenset(cls.SEPARATOR)):
-				raise ValueError('Invalid path name: {}'.format(part))
+		if invalid_component := frozenset(tail) & cls.INVALID_PATH_COMPONENTS:
+			raise ValueError('Invalid path component: {}'.format(invalid_component))
+		
+		for part in tail:
+			if invalid_chars := frozenset(part) & (cls.INVALID_PATH_CHARS | frozenset(cls.SEPARATOR)):
+				raise ValueError('Invalid character(s) in path component: "{}" -> {}'.format(invalid_chars, part))
 
 		return True
 
@@ -343,26 +361,18 @@ class BasePurePath(tuple):
 		Compute a version of this path relative to the path presented by "other". If it's impossible, ValueError is raised.
 		
 		:param other: The supposed parent path
-		:param bool walk_up: when true, "other" can be a sibling and the result will contain enough self.PARENT_CHARACTER_ENTRY components to reach the common ancestor.
+		:param bool walk_up: when true, "other" can be a sibling. This would be a local logic and would have to be reimplemented locally (it's not supported by default)
 		:return type(self): A new instance of this type of path with the relative path
 		"""
+		
+		if walk_up:
+			raise NotImplementedError('relative_to with walk_up')
 
 		other = self.convert_path(other)
-		if self.is_relative_to(other):
-			new_tail = self.tail[len(other.tail):]
-		else:
-			if walk_up:
-				new_tail = None
-				for i in range(len(other.parents)):
-					if other.parents[i] in self.parents:
-						new_tail = [self.PARENT_CHARACTER_ENTRY] * (i + 1) + self.relative_to(other.parents[i]).tail
-						break
-				if new_tail is None:
-					raise ValueError(f"{str(self)!r} is not related to {str(other)!r}")
-			else:
-				raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
+		if not self.is_relative_to(other):
+			raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
 
-		return self.__class__(drive='', root='', tail=new_tail)
+		return self.__class__(drive='', root='', tail=self.tail[len(other.tail):])
 
 	def with_name(self, name):
 		"""Different name

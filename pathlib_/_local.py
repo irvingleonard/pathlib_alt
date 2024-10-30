@@ -11,16 +11,50 @@ from logging import getLogger
 import os
 import stat
 
-from ._base import BasePath, __version__
+from ._base import BasePath, BasePurePath, __version__
 
 LOGGER = getLogger(__name__)
+
+
+class BaseOSPurePath(BasePurePath):
+	"""Further implementation of BasePurePath for local filesystems
+	Extends the BasePurePath by adding method implementations that are portable between local filesystem (POSIX & Windows)
+	"""
+	
+	PARENT_CHARACTER_ENTRY = '..'
+	
+	def relative_to(self, other, walk_up=False):
+		"""Relative to "other" path
+		Compute a version of this path relative to the path presented by "other". If it's impossible, ValueError is raised.
+
+		:param other: The supposed parent path
+		:param bool walk_up: when true, "other" can be a sibling and the result will contain enough self.PARENT_CHARACTER_ENTRY components to reach the common ancestor.
+		:return type(self): A new instance of this type of path with the relative path
+		"""
+		
+		other = self.convert_path(other)
+		if self.is_relative_to(other):
+			new_tail = self.tail[len(other.tail):]
+		else:
+			if walk_up:
+				new_tail = None
+				for i in range(len(other.parents)):
+					if other.parents[i] in self.parents:
+						new_tail = [self.PARENT_CHARACTER_ENTRY] * (i + 1) + self.relative_to(other.parents[i]).tail
+						break
+				if new_tail is None:
+					raise ValueError(f"{str(self)!r} is not related to {str(other)!r}")
+			else:
+				raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
+		
+		return self.__class__(drive='', root='', tail=new_tail)
 
 
 class BaseOSPath(BasePath):
 	"""Further implementation of BasePath for local filesystems
 	Extends the BasePath by adding method implementations that are portable between local filesystem (POSIX & Windows)
 	"""
-
+	
 	_pathmod = None
 
 	@classmethod

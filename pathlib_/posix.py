@@ -8,13 +8,13 @@ This submodule contains the specifics for POSIX systems.
 from logging import getLogger
 import posixpath
 
-from ._base import BasePurePath, __version__
-from ._local import BaseOSPath
+from ._base import __version__
+from ._local import BaseOSPath, BaseOSPurePath
 
 LOGGER = getLogger(__name__)
 
 
-class PurePosixPath(BasePurePath):
+class PurePosixPath(BaseOSPurePath):
 	"""
 	
 	"""
