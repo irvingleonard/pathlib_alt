@@ -21,14 +21,28 @@ class BaseOSPurePath(BasePurePath):
 	Extends the BasePurePath by adding method implementations that are portable between local filesystem (POSIX & Windows)
 	"""
 	
-	PARENT_CHARACTER_ENTRY = '..'
+	CURRENT_DIRECTORY_ENTRY = '.'
+	PARENT_DIRECTORY_ENTRY = '..'
+	
+	def __str__(self):
+		"""String magic
+		Uses the configured SEPARATOR to create a string with the components of this path, suitable for passing to system calls. An empty path will yield the CURRENT_DIRECTORY_ENTRY instead of the empty string.
+
+		:return str: this path as a string
+		"""
+
+		try:
+			return self._str
+		except AttributeError:
+			self._str = self._basic_str if self._basic_str else self.CURRENT_DIRECTORY_ENTRY
+			return self._str
 	
 	def relative_to(self, other, walk_up=False):
 		"""Relative to "other" path
 		Compute a version of this path relative to the path presented by "other". If it's impossible, ValueError is raised.
 
 		:param other: The supposed parent path
-		:param bool walk_up: when true, "other" can be a sibling and the result will contain enough self.PARENT_CHARACTER_ENTRY components to reach the common ancestor.
+		:param bool walk_up: when true, "other" can be a sibling and the result will contain enough self.PARENT_DIRECTORY_ENTRY components to reach the common ancestor.
 		:return type(self): A new instance of this type of path with the relative path
 		"""
 		
@@ -40,7 +54,7 @@ class BaseOSPurePath(BasePurePath):
 				new_tail = None
 				for i in range(len(other.parents)):
 					if other.parents[i] in self.parents:
-						new_tail = [self.PARENT_CHARACTER_ENTRY] * (i + 1) + self.relative_to(other.parents[i]).tail
+						new_tail = (self.PARENT_DIRECTORY_ENTRY,) * (i + 1) + self.relative_to(other.parents[i]).tail
 						break
 				if new_tail is None:
 					raise ValueError(f"{str(self)!r} is not related to {str(other)!r}")

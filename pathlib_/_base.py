@@ -9,6 +9,9 @@ from abc import ABC, abstractmethod
 from io import text_encoding as io_text_encoding
 from logging import getLogger
 from os import fspath
+from re import IGNORECASE as RE_IGNORECASE, NOFLAG as RE_NOFLAG, match as re_match
+
+from pathlib_.glob_ import translate as glob_translate
 
 __version__ = '2023.1'
 
@@ -33,6 +36,7 @@ class BasePurePath(tuple):
 	DRIVE_SUPPORTED = False
 	INVALID_PATH_CHARS = frozenset()
 	INVALID_PATH_COMPONENTS = frozenset()
+	JOINPATH_INSANE_BEHAVIOR = JOINPATH_INSANE_BEHAVIOR
 	SEPARATOR = '/'
 	SUFFIX_SEPARATOR = '.'
 
@@ -66,17 +70,26 @@ class BasePurePath(tuple):
 		"""Lazy attribute resolution
 		Avoid some processing until is actually needed.
 		"""
-
-		for attribute_names, resolver_callable in self.LOCAL_PARSING.items():
-			if name in attribute_names:
-				results = resolver_callable(self)
-				for i in range(len(attribute_names)):
-					self.__setattr__(attribute_names[i], results[i])
-					if name == attribute_names[i]:
-						result = results[i]
-				return result
-
-		raise AttributeError(name)
+		
+		if name == '_basic_str':
+			value = ((self.anchor if self.anchor else '') + self.SEPARATOR.join(self.tail))
+			value.encode('unicode-escape').decode()
+		elif name == '_pattern_str':
+			value = self._basic_str
+		else:
+			for attribute_names, resolver_callable in self.LOCAL_PARSING.items():
+				if name in attribute_names:
+					results = resolver_callable(self)
+					for i in range(len(attribute_names)):
+						self.__setattr__(attribute_names[i], results[i])
+						if name == attribute_names[i]:
+							result = results[i]
+					return result
+	
+			raise AttributeError(name)
+		
+		self.__setattr__(name, value)
+		return value
 
 	def __new__(cls, *args, drive=None, root=None, tail=None):
 		"""Creation magic
@@ -108,13 +121,13 @@ class BasePurePath(tuple):
 			drive, root, tail = cls._parse_path(cls.SEPARATOR.join(paths))
 
 		anchor = drive + root
-		parts = tuple(([anchor] if anchor else []) + [part for part in tail if part])
+		parts = ([anchor] if anchor else []) + [part for part in tail]
 		cls._validate_parts(anchor, *tail)
 		simplified_tail = cls._simplify_tail(anchor, *tail)
 
 		path = super().__new__(cls, ([anchor] if anchor else []) + simplified_tail)
 
-		path.parts, path.drive, path.root, path.anchor, path.tail, path.simplified_tail = parts, drive, root, anchor, tail, simplified_tail
+		path.parts, path.drive, path.root, path.anchor, path.tail, path.simplified_tail = tuple(parts), drive, root, anchor, tuple(tail), tuple(simplified_tail)
 		path.LOCAL_PARSING = {
 			('name', 'stem', 'suffix', 'pure_stem', 'suffixes') : path._parse_name,
 			('parent', 'parents') : path._get_parents,
@@ -151,17 +164,15 @@ class BasePurePath(tuple):
 
 	def __str__(self):
 		"""String magic
-		Return the string representation of the path, suitable for passing to system calls.
-
-		ToDo: Why default to "."?
+		Using a default behavior here. This method usually gets replaced that's why the default behavior implementation lives in "_true_str".
+		
+		:return str: this path as a string
 		"""
-
+		
 		try:
 			return self._str
 		except AttributeError:
-			str_value = ((self.anchor if self.anchor else '') + self.SEPARATOR.join(self.tail)) or '.'
-			str_value.encode('unicode-escape').decode()
-			self._str = str_value
+			self._str = self._basic_str
 			return self._str
 
 	def __truediv__(self, other):
@@ -174,15 +185,16 @@ class BasePurePath(tuple):
 		except TypeError:
 			return NotImplemented
 
-	@classmethod
-	def _get_parents(cls, path_instance):
+	@staticmethod
+	def _get_parents(path_instance):
 		"""Get the parents of a certain path instance
 		The default implementation should work for most cases. Child classes can override it for custom behavior. New implementations should have the same signature and return the same structure.
 		
 		:param path_instance: the Path instance to get the parents from
-		:return: currently a tuple of ('parent', 'parents') where parent is the direct parent and parents is the list from the closest to the furthest parent in the tree. The current expected result is the matching key on the cls.LOCAL_PARSING dictionary.
+		:return: currently a tuple of ('parent', 'parents') where parent is the direct parent and parents is the list from the closest to the furthest parent in the tree (as a tuple). The current expected result is the matching key on the cls.LOCAL_PARSING dictionary.
 		"""
-
+		
+		cls = type(path_instance)
 		parent, parents = path_instance, []
 		if path_instance.tail:
 			for i in range(len(path_instance.tail) - 1, 0, -1):
@@ -194,7 +206,7 @@ class BasePurePath(tuple):
 			if len(parents):
 				parent = parents[0]
 
-		return parent, parents
+		return parent, tuple(parents)
 
 	@staticmethod
 	def _parse_name(path_instance):
@@ -271,7 +283,7 @@ class BasePurePath(tuple):
 		
 		:return str: A string representing the supposedly "POSIX equivalent" of this path.
 		"""
-
+		
 		raise NotImplementedError('as_posix()')
 
 	@classmethod
@@ -294,9 +306,8 @@ class BasePurePath(tuple):
 		:return bool: True if matching is successful, False otherwise.
 		"""
 		
-		# ToDo: implement!
-		raise NotImplementedError('full_match()')
-
+		return self.match(pattern, case_sensitive=case_sensitive, recursive=True)
+	
 	def is_absolute(self):
 		"""Is it absolute?
 		True if the path is absolute. A path is considered absolute if it has both a root and a drive (if supported).
@@ -332,7 +343,7 @@ class BasePurePath(tuple):
 		for path in pathsegments:
 			path = self.convert_path(path)
 			if path.anchor:
-				if JOINPATH_INSANE_BEHAVIOR:
+				if self.JOINPATH_INSANE_BEHAVIOR:
 					if (path.drive == self.drive) and not path.root:
 						tail.extend(list(path.tail))
 					else:
@@ -344,7 +355,7 @@ class BasePurePath(tuple):
 
 		return self.__class__(drive=drive, root=root, tail=tail)
 
-	def match(self, pattern, *, case_sensitive=None):
+	def match(self, pattern, *, case_sensitive=None, recursive=False):
 		"""Globbing with the pattern language
 		Match this path against the provided non-recursive glob-style pattern. Empty patterns aren't allowed, recursive wildcard ("**") becomes "*", and relative patterns will trigger the matching to be done from the right.
 
@@ -353,8 +364,29 @@ class BasePurePath(tuple):
 		:return bool: True if matching is successful, False otherwise.
 		"""
 		
-		# ToDo: implement!
-		raise NotImplementedError('match()')
+		pattern = self.convert_path(pattern)
+		if (case_sensitive is None) and hasattr(self, 'CASE_SENSITIVE'):
+			case_sensitive = self.CASE_SENSITIVE
+		flags = RE_IGNORECASE if (case_sensitive is not None) and not case_sensitive else RE_NOFLAG
+		
+		if recursive:
+			regex = glob_translate(pattern._pattern_str, recursive=True, include_hidden=True, seps=pattern.SEPARATOR)
+			return re_match(regex, self._pattern_str, flags=flags) is not None
+		
+		reverse_pattern_parts, reverse_path_parts = pattern.parts[::-1], self.parts[::-1]
+		
+		if not reverse_pattern_parts:
+			raise ValueError("empty pattern")
+		if len(reverse_path_parts) < len(reverse_pattern_parts):
+			return False
+		if len(reverse_path_parts) > len(reverse_pattern_parts) and pattern.anchor:
+			return False
+		
+		for path_part, pattern_part in zip(reverse_path_parts, reverse_pattern_parts):
+			regex = glob_translate(str(pattern_part), recursive=False, include_hidden=True, seps=pattern.SEPARATOR)
+			if re_match(regex, path_part, flags=flags) is None:
+				return False
+		return True
 
 	def relative_to(self, other, walk_up=False):
 		"""Relative to "other" path
@@ -377,19 +409,12 @@ class BasePurePath(tuple):
 	def with_name(self, name):
 		"""Different name
 		Create a similar path with the name component replaced (the last part of the path).
-
-		It won't work on paths without names (like the root)
-		The name can't be empty, nor have the SEPARATOR in it, nor be the "dot" (".")
 		
 		:param name: The name for the new path instance
 		:return type(self): A new instance of this type of path with the new name
 		"""
 
-		if not self.name:
-			raise ValueError("%r has an empty name" % (self,))
-		self._validate_tail_parts(name)
-
-		return self.__class__(drive=self.drive, root=self.root, tail=(self.tail[:-1] + [name]))
+		return self.__class__(drive=self.drive, root=self.root, tail=(self.tail[:-1] + (name,)))
 
 	def with_pure_stem(self, pure_stem):
 		"""Different pure_stem
@@ -423,9 +448,10 @@ class BasePurePath(tuple):
 		:param stem: The stem for the new path instance
 		:return type(self): A new instance of this type of path with the new stem
 		"""
-
-		if not stem:
-			raise ValueError('Invalid stem "{}"'.format(stem))
+		
+		if (not stem) and self.suffix:
+			raise ValueError("Can't clear stem while having suffix. Use with_name instead.")
+		
 		return self.with_name(stem + self.suffix)
 
 	def with_suffix(self, suffix):
@@ -438,6 +464,8 @@ class BasePurePath(tuple):
 
 		if suffix and not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
 			raise ValueError('Invalid suffix {}'.format(suffix))
+		if not self.stem:
+			raise ValueError("Can't add suffix to empty stem. Use with_name instead.")
 		return self.with_name(self.stem + suffix)
 
 	def with_suffixes(self, *suffixes):
@@ -583,7 +611,7 @@ class BasePath(ABC):
 	@abstractmethod
 	def exists(self, *, follow_symlinks=True):
 		""" Whether this path exists.
-        This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
+		This method normally follows symlinks; to check whether a symlink exists, add the argument follow_symlinks=False.
 		"""
 
 		raise NotImplementedError('exists')
@@ -709,7 +737,7 @@ class BasePath(ABC):
 	@abstractmethod
 	def iterdir(self):
 		"""Yield path objects of the directory contents.
-        The children are yielded in arbitrary order, and the special entries '.' and '..' are not included.
+		The children are yielded in arbitrary order, and the special entries '.' and '..' are not included.
 		"""
 
 		raise NotImplementedError('iterdir')

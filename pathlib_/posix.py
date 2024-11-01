@@ -34,8 +34,12 @@ class PurePosixPath(BaseOSPurePath):
 
 		if path:
 			if path[0] == cls.SEPARATOR:
-				root = cls.SEPARATOR
-				tail = path[1:]
+				if (path[1:2] == cls.SEPARATOR) and (path[2:3] != cls.SEPARATOR):
+					root = cls.SEPARATOR * 2
+					tail = path[2:]
+				else:
+					root = cls.SEPARATOR
+					tail = path[1:]
 			else:
 				root = ''
 				tail = path
