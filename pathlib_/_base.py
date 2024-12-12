@@ -21,7 +21,7 @@ LOGGER = getLogger(__name__)
 
 class BasePurePath(tuple):
 	"""Base class for manipulating paths without I/O.
-	BasePurePath represents a filesystem path and offers operations which don't imply any actual filesystem I/O.
+	BasePurePath represents a conceptual path and offers operations which don't imply any actual I/O.
 
 	This class expects the path to be a string or better (doesn't deal with bytes). It keeps two versions of the path:
 	- the original value, that will be returned with str() and the parts are available in the "parts" attribute (the "repr" logic uses this version).
@@ -246,7 +246,7 @@ class BasePurePath(tuple):
 	def _simplify_tail(anchor='', *tail):
 		"""Simplify components
 		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence.
-		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'bar', 'baz')
+		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'baz')
 		
 		The default is a passthrough (do nothing).
 		
