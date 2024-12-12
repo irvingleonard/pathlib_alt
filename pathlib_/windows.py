@@ -5,17 +5,16 @@ The original pathlib module seems to revolve around the idea that the path is a 
 This submodule contains the specifics for the Windows systems.
 """
 
+from abc import abstractmethod
 from logging import getLogger
 import ntpath
 
-from ._base import BasePurePath
-
-__version__ = '2023.1'
+from ._local import __version__, BaseOSPath, BaseOSPurePath
 
 LOGGER = getLogger(__name__)
 
 
-class PureWindowsPath(BasePurePath):
+class PureWindowsPath(BaseOSPurePath):
 	"""
 	
 	"""
@@ -121,8 +120,109 @@ class PureWindowsPath(BasePurePath):
 		"""
 		Return True if the path contains one of the special names reserved by the system, if any.
 		"""
+		
+		if self.stem:
+			return (self.stem.upper() in self.RESERVED_NAMES) or (self.with_suffix('') in self.RESERVED_RELATIVE_PATHS) or (self.resolve().with_suffix('') in self.RESERVED_ABSOLUTE_PATHS)
+		else:
+			return False
 
-		if self.pure_stem:
-			if frozenset((self.pure_stem if self.CASE_SENSITIVE else self.pure_stem.upper(),)) & self.RESERVED_NAMES:
-				return True
-		return False
+
+class WindowsPath(BaseOSPath, PureWindowsPath):
+	"""
+
+	"""
+	
+	@classmethod
+	def new_instance(cls, *args, **kwargs):
+		"""
+
+		"""
+		
+		return cls(*args, **kwargs).stat()
+	
+	## Parsing and generating URIs ##
+	
+	@classmethod
+	def from_uri(cls, uri):
+		"""From URI
+		Return a new path object from parsing a "file" URI.
+
+		:param uri: The URI to parse
+		:return type(self): A new instance of this type of path based out of the URI
+		"""
+		
+		raise NotImplementedError('from_uri')
+	
+	def as_uri(self):
+		"""As URI
+		Represent the path as a "file" URI.
+
+		:return bool: A string representing the supposedly "file URI" for this path.
+		"""
+		
+		raise NotImplementedError('as_uri')
+		
+	## Expanding and resolving paths ##
+	
+	@classmethod
+	@abstractmethod
+	def home(cls):
+		"""User home
+		Resolves the user’s home directory path. If the home directory can’t be resolved, RuntimeError is raised.
+
+		:return type(cls): A new instance of this type pointing to the current user's home directory
+		"""
+		
+		raise NotImplementedError('home')
+	
+	@abstractmethod
+	def expanduser(self):
+		"""Expand user
+		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved, RuntimeError is raised.
+
+		:return type(cls): A new instance of this type with the user's home directory expanded
+		"""
+		
+		raise NotImplementedError('expanduser')
+	
+	@classmethod
+	@abstractmethod
+	def cwd(cls):
+		"""Current working directory
+		Resolve the current working directory.
+
+		:return type(cls): A new instance of this type pointing to the current working directory
+		"""
+		
+		raise NotImplementedError('cwd')
+	
+	@abstractmethod
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		raise NotImplementedError('absolute')
+	
+	@abstractmethod
+	def resolve(self, strict=False):
+		"""Resolve the absolute path
+		Make the path absolute not only with an anchor but in the underlying filesystem by resolving upwards movements and following symlinks.
+
+		:param bool? strict: If False, it will be a best effort process. Non-existing branches and symlinks loops will break the process and non-resolved part will be appended as-is, "assuming" that it will be there. When True, such problems will raise an OSError instead.
+		:return type(cls): A new instance of this type which is absolute.
+		"""
+		
+		raise NotImplementedError('resolve')
+	
+	@abstractmethod
+	def readlink(self):
+		"""Resolve link
+		Resolves the path to which the symbolic link points
+
+		:return type(cls): A new instance of this type pointing to the symlink's target.
+		"""
+		
+		raise NotImplementedError('readlink')

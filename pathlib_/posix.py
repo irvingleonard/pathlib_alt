@@ -5,11 +5,11 @@ The original pathlib module seems to revolve around the idea that the path is a 
 This submodule contains the specifics for POSIX systems.
 """
 
+from abc import abstractmethod
 from logging import getLogger
 import posixpath
 
-from ._base import __version__
-from ._local import BaseOSPath, BaseOSPurePath
+from ._local import __version__, BaseOSPath, BaseOSPurePath
 
 LOGGER = getLogger(__name__)
 
@@ -77,3 +77,108 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		"""
 		
 		return cls(*args, **kwargs).stat()
+	
+	## Parsing and generating URIs ##
+	
+	@classmethod
+	def from_uri(cls, uri):
+		"""From URI
+		Return a new path object from parsing a "file" URI.
+
+		:param uri: The URI to parse
+		:return type(self): A new instance of this type of path based out of the URI
+		"""
+		
+		raise NotImplementedError('from_uri')
+	
+	def as_uri(self):
+		"""As URI
+		Represent the path as a "file" URI.
+
+		:return bool: A string representing the supposedly "file URI" for this path.
+		"""
+		
+		raise NotImplementedError('as_uri')
+		
+	## Expanding and resolving paths ##
+	
+	@classmethod
+	def home(cls, user=None):
+		"""User home
+		Retrieves the user’s home directory path. If the home directory can’t be found, RuntimeError is raised.
+
+		:return type(cls): A new instance of this type pointing to the provided user's home directory (current user with default None)
+		"""
+		
+		environ = cls._get_os_attr('environ', call_it=False)
+		if user is None:
+			if ('HOME' in environ) and environ['HOME']:
+				return environ['HOME']
+			else:
+				user = cls._get_os_attr('getlogin')
+				
+		try:
+			import pwd
+			return pwd.getpwnam(user).pw_dir
+		except (ImportError, KeyError):
+			raise RuntimeError('Home directory not available for user "{}"'.format(user))
+	
+	def expanduser(self, fail_hard=True):
+		"""Expand user
+		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved and the fail_hard parameter is True, RuntimeError is raised; otherwise the constructs are not replaced.
+		
+		Ref: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_01
+
+		:return type(cls): A new instance of this type with the user's home directory expanded (or not)
+		"""
+		
+		if self.tail:
+			if self.tail[0] == '~':
+				try:
+					return self.home()
+				except RuntimeError:
+					if fail_hard:
+						raise
+			elif self.tail[0] and (self.tail[0][0] == '~'):
+				try:
+					return self.home(user=self.tail[0][1:])
+				except RuntimeError:
+					if fail_hard:
+						raise
+				
+		return self
+	
+	@abstractmethod
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		raise NotImplementedError('absolute')
+	
+	@abstractmethod
+	def resolve(self, strict=False):
+		"""Resolve the absolute path
+		Make the path absolute not only with an anchor but in the underlying filesystem by resolving upwards movements and following symlinks.
+
+		:param bool? strict: If False, it will be a best effort process. Non-existing branches and symlinks loops will break the process and non-resolved part will be appended as-is, "assuming" that it will be there. When True, such problems will raise an OSError instead.
+		:return type(cls): A new instance of this type which is absolute.
+		"""
+		
+		raise NotImplementedError('resolve')
+	
+	@abstractmethod
+	def readlink(self):
+		"""Resolve link
+		Resolves the path to which the symbolic link points
+
+		:return type(cls): A new instance of this type pointing to the symlink's target.
+		"""
+		
+		raise NotImplementedError('readlink')
+	
+	@classmethod
+	def test(cls, *parts):
+		return cls(*parts).expanduser(fail_hard=False)

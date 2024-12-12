@@ -2,7 +2,7 @@
 """A reimplementation of the python standard library's pathlib.
 The original pathlib module seems to revolve around the idea that the path is a string, and then it can't decide if the paths are immutable or not. This module works with a different paradigm: a path is a sequence of individual components divided by a "separator" and such sequence is immutable.
 
-This submodule implements methods of the base protocol to be used with a local filesystem.
+This submodule implements methods of the base protocol to be used with a local filesystem, either POSIX or Windows.
 """
 
 from abc import abstractmethod
@@ -11,7 +11,7 @@ from logging import getLogger
 import os
 import stat
 
-from ._base import BasePath, BasePurePath, __version__
+from ._base import __version__, BasePath, BasePurePath
 
 LOGGER = getLogger(__name__)
 
@@ -59,7 +59,7 @@ class BaseOSPurePath(BasePurePath):
 				if new_tail is None:
 					raise ValueError(f"{str(self)!r} is not related to {str(other)!r}")
 			else:
-				raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
+				raise ValueError(f"{str(self)!r} is not a subpath of {str(other)!r}")
 		
 		return self.__class__(drive='', root='', tail=new_tail)
 
@@ -106,14 +106,66 @@ class BaseOSPath(BasePath):
 		"""
 		
 		pass
+		
+	## Expanding and resolving paths ##
+	
+	@classmethod
+	def home(cls):
+		"""
+		Return a new path pointing to expanduser('~').
+		"""
+		
+		return cls('~').expanduser()
+	
+	def expanduser(self):
+		"""
+		Return a new path with expanded ~ and ~user constructs. If a home directory can’t be resolved, RuntimeError is raised.
+		"""
+		
+		if (not (self.drive or self.root)) and self._tail and (self._tail[0][:1] == '~'):
+			homedir = os.path.expanduser(self._tail[0])
+			if homedir[:1] == "~":
+				raise RuntimeError("Could not determine home directory.")
+			drive, root, tail = self._parse_path(homedir)
+			return self.__class__(drive=drive, root=root, tail=tail + self._tail[1:])
+		
+		return self
+	
+	@classmethod
+	def cwd(cls):
+		"""
+		Return a new path pointing to the current working directory
+		"""
+		
+		return cls(cls._get_os_attr('getcwd'))
+	
+	@abstractmethod
+	def resolve(self, strict=False):
+		"""Make the path absolute, resolving any symlinks. A new path object is returned.
+		"""
+		
+		raise NotImplementedError('resolve')
+	
+	def readlink(self):
+		"""Return the path to which the symbolic link points
+		It's effectively forwarding the resolution to os.readlink with the current path
+		"""
+		
+		return self.convert_path(self._get_os_attr('readlink', str(self)))
 	
 	## Querying file type and status ##
 
-	def stat(self, *ignoring, follow_symlinks=True):
+	def stat(self, *, follow_symlinks=True):
 		"""Return the result of the stat() system call on this path, like os.stat() does.
 		"""
 
 		return self._get_os_attr('stat', self, follow_symlinks=follow_symlinks)
+	
+	def lstat(self):
+		"""Return the result of the stat() system call on this path, like os.stat() does.
+		"""
+		
+		return self.stat(follow_symlinks=False)
 
 	def exists(self, *, follow_symlinks=True):
 		""" Whether this path exists.
@@ -126,7 +178,7 @@ class BaseOSPath(BasePath):
 			return False
 		return True
 
-	def is_file(self):
+	def is_file(self, *, follow_symlinks=True):
 		"""Whether this path is a regular file (also True for symlinks pointing to regular files).
 		"""
 
@@ -135,7 +187,7 @@ class BaseOSPath(BasePath):
 		except (OSError, ValueError):
 			return False
 
-	def is_dir(self):
+	def is_dir(self, *, follow_symlinks=True):
 		"""Whether this path is a directory.
 		"""
 
@@ -149,10 +201,16 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISLNK', self.stat(follow_symlinks=follow_symlinks).st_mode)
+			return self._get_stat_attr('S_ISLNK', self.stat().st_mode)
 		except (OSError, ValueError):
 			return False
-
+	
+	def is_symlink(self):
+		"""Whether this path is a symbolic link.
+		"""
+		
+		raise NotImplementedError('is_symlink')
+	
 	def is_mount(self):
 		"""Check if this path is a mount point
 		"""
@@ -178,7 +236,7 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISSOCK', self.stat(follow_symlinks=follow_symlinks).st_mode)
+			return self._get_stat_attr('S_ISSOCK', self.stat().st_mode)
 		except (OSError, ValueError):
 			return False
 
@@ -187,7 +245,7 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISFIFO', self.stat(follow_symlinks=follow_symlinks).st_mode)
+			return self._get_stat_attr('S_ISFIFO', self.stat().st_mode)
 		except (OSError, ValueError):
 			return False
 
@@ -196,7 +254,7 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISBLK', self.stat(follow_symlinks=follow_symlinks).st_mode)
+			return self._get_stat_attr('S_ISBLK', self.stat().st_mode)
 		except (OSError, ValueError):
 			return False
 
@@ -205,7 +263,7 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISCHR', self.stat(follow_symlinks=follow_symlinks).st_mode)
+			return self._get_stat_attr('S_ISCHR', self.stat().st_mode)
 		except (OSError, ValueError):
 			return False
 
@@ -346,75 +404,34 @@ class BaseOSPath(BasePath):
 
 		self._get_os_attr('rmdir', self)
 	
-	## Other methods ##
-
-	@classmethod
-	def cwd(cls):
-		"""Return a new path pointing to the current working directory
+	## Permissions and Ownership ##
+	
+	@abstractmethod
+	def owner(self):
+		"""Return the name of the user owning the file. KeyError is raised if the file’s uid isn’t found in the system database.
 		"""
-
-		return cls('.').absolute()
-
-	@classmethod
-	def home(cls):
+		
+		raise NotImplementedError('owner')
+	
+	@abstractmethod
+	def group(self):
+		"""Return the name of the group owning the file. KeyError is raised if the file’s gid isn’t found in the system database.
 		"""
-		Return a new path pointing to expanduser('~').
-		"""
-
-		return cls('~').expanduser()
-
+		
+		raise NotImplementedError('group')
+	
 	@abstractmethod
 	def chmod(self, mode, *ignoring, follow_symlinks=True):
 		"""Change the file mode and permissions
 		This method normally follows symlinks. Some Unix flavours support changing permissions on the symlink itself; on these platforms you may add the argument follow_symlinks = False, or use lchmod().
 		"""
-
+		
 		self._get_os_attr('chmod', self, mode, follow_symlinks=follow_symlinks)
-
-	def expanduser(self):
-		"""Return a new path with expanded ~ and ~user constructs. If a home directory can’t be resolved, RuntimeError is raised.
-		"""
-
-		if (not (self.drive or self.root)) and self._tail and (self._tail[0][:1] == '~'):
-			homedir = os.path.expanduser(self._tail[0])
-			if homedir[:1] == "~":
-				raise RuntimeError("Could not determine home directory.")
-			drive, root, tail = self._parse_path(homedir)
-			return self.__class__(drive=drive, root=root, tail=tail+self._tail[1:])
-
-		return self
-
+	
 	@abstractmethod
-	def group(self):
-		"""Return the name of the group owning the file. KeyError is raised if the file’s gid isn’t found in the system database.
+	def lchmod(self, mode):
+		"""Change the file mode and permissions for symlink
+		Just like chmod but, if the path points to a symbolic link, the symbolic link's mode is changed rather.
 		"""
-
-		raise NotImplementedError('group')
-
-	@abstractmethod
-	def owner(self):
-		"""Return the name of the user owning the file. KeyError is raised if the file’s uid isn’t found in the system database.
-		"""
-
-		raise NotImplementedError('owner')
-
-	@abstractmethod
-	def readlink(self):
-		"""Return the path to which the symbolic link points
-		"""
-
-		raise NotImplementedError('readlink')
-
-	@abstractmethod
-	def absolute(self):
-		"""Make the path absolute, without normalization or resolving symlinks. Returns a new path object.
-		"""
-
-		raise NotImplementedError('absolute')
-
-	@abstractmethod
-	def resolve(self, strict = False):
-		"""Make the path absolute, resolving any symlinks. A new path object is returned.
-		"""
-
-		raise NotImplementedError('resolve')
+	
+		return self.chmod(mode, follow_symlinks=False)
