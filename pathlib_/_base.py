@@ -13,7 +13,7 @@ from re import IGNORECASE as RE_IGNORECASE, NOFLAG as RE_NOFLAG, match as re_mat
 
 from pathlib_.glob_ import translate as glob_translate
 
-__version__ = '2023.1'
+__version__ = '0.1.0.dev0'
 
 JOINPATH_INSANE_BEHAVIOR = False
 LOGGER = getLogger(__name__)
@@ -285,60 +285,38 @@ class BasePurePath(tuple):
 		"""
 		
 		raise NotImplementedError('as_posix()')
-
-	@classmethod
-	def convert_path(cls, path):
-		"""Convert the provided path to an object of this class.
-		Very thin layer, just an optimization to avoid parsing the same object several times. It basically confirms that the path is in the right "format".
-		
-		:param path: The "path" to create the instance
-		:return cls: An instance of "cls" created out of "path"
-		"""
-
-		return path if isinstance(path, cls) else cls(path)
-	
-	def full_match(self, pattern, *, case_sensitive=None):
-		"""Globbing with the pattern language
-		Match this path against the provided glob-style pattern.
-
-		:param str pattern: The pattern, following the "pattern language"
-		:param bool? case_sensitive: True will make comparisons case-sensitive, False will do the opposite. None (the default) will "guess" the right value from the system.
-		:return bool: True if matching is successful, False otherwise.
-		"""
-		
-		return self.match(pattern, case_sensitive=case_sensitive, recursive=True)
 	
 	def is_absolute(self):
 		"""Is it absolute?
 		True if the path is absolute. A path is considered absolute if it has both a root and a drive (if supported).
-		
+
 		:return bool: True if it has root and drive (if supported), False otherwise.
 		"""
-
+		
 		return (bool(self.drive) if self.DRIVE_SUPPORTED else True) and bool(self.root)
-
+	
 	def is_relative_to(self, other):
 		"""Is it relative to "other"?
 		Check if the path is relative to another path.
-		
+
 		:param other: The potentially parent path
 		:return bool: True if it's a parent, False otherwise
 		"""
-
+		
 		other = self.convert_path(other)
 		return other == self or other in self.parents
-
+	
 	def joinpath(self, *pathsegments):
 		"""Join path
 		Combine this path with one or several arguments, and return a new subpath.
 
 		The JOINPATH_INSANE_BEHAVIOR (default upstream behavior, currently not implemented) would return a totally different path if one of the arguments is anchored; actually, it would replace the path with the latest anchored argument joined to the rest (and would drop everything else, including the current content and all the earliest arguments).
 		Ex: ('/', 'tmp').joinpath('esdferts-asf328', '/usr/local/bin/my_script.sh', '/etc', 'shadow') would yield ('/', 'etc', 'shadow')
-		
+
 		:param pathsegments: The multiple segments to join into this path
 		:return type(self): A new instance of this type of path with the extra segments appended
 		"""
-
+		
 		drive, root, tail = self.drive, self.root, list(self.tail)
 		for path in pathsegments:
 			path = self.convert_path(path)
@@ -352,8 +330,19 @@ class BasePurePath(tuple):
 					raise ValueError("Can't join an anchored path")
 			else:
 				tail.extend(list(path.tail))
-
+		
 		return self.__class__(drive=drive, root=root, tail=tail)
+	
+	def full_match(self, pattern, *, case_sensitive=None):
+		"""Globbing with the pattern language
+		Match this path against the provided glob-style pattern.
+
+		:param str pattern: The pattern, following the "pattern language"
+		:param bool? case_sensitive: True will make comparisons case-sensitive, False will do the opposite. None (the default) will "guess" the right value from the system.
+		:return bool: True if matching is successful, False otherwise.
+		"""
+		
+		return self.match(pattern, case_sensitive=case_sensitive, recursive=True)
 
 	def match(self, pattern, *, case_sensitive=None, recursive=False):
 		"""Globbing with the pattern language
@@ -415,7 +404,20 @@ class BasePurePath(tuple):
 		"""
 
 		return self.__class__(drive=self.drive, root=self.root, tail=(self.tail[:-1] + (name,)))
+	
+	def with_stem(self, stem):
+		"""Different stem
+		Create a similar path with the stem replaced.
 
+		:param stem: The stem for the new path instance
+		:return type(self): A new instance of this type of path with the new stem
+		"""
+		
+		if (not stem) and self.suffix:
+			raise ValueError("Can't clear stem while having suffix. Use with_name instead.")
+		
+		return self.with_name(stem + self.suffix)
+	
 	def with_pure_stem(self, pure_stem):
 		"""Different pure_stem
 		Create a similar path with the pure_stem replaced.
@@ -430,6 +432,33 @@ class BasePurePath(tuple):
 			raise ValueError('Provided pure_stem is not pure, it contains suffixes "{}"'.format(pure_stem))
 		return self.with_name(pure_stem + ''.join(self.suffixes))
 	
+	def with_suffix(self, suffix):
+		"""Different suffix
+		Create a similar path with the suffix replaced. If the path has no suffix, add given suffix. If the given suffix is an empty string, remove the suffix from the path.
+
+		:param suffix: The suffix for the new path instance
+		:return type(self): A new instance of this type of path with the new suffix
+		"""
+		
+		if suffix and not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
+			raise ValueError('Invalid suffix {}'.format(suffix))
+		if not self.stem:
+			raise ValueError("Can't add suffix to empty stem. Use with_name instead.")
+		return self.with_name(self.stem + suffix)
+	
+	def with_suffixes(self, *suffixes):
+		"""Different suffixes
+		Create a similar path with the suffixes replaced. If the path has no suffixes, add given suffixes. If no suffixes are given, remove the suffixes from the path.
+
+		:param suffixes: The list of suffixes for the new path instance
+		:return type(self): A new instance of this type of path with the new suffixes
+		"""
+		
+		for suffix in suffixes:
+			if not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
+				raise ValueError('Invalid suffix {}'.format(suffix))
+		return self.with_name(self.pure_stem + ''.join(suffixes))
+	
 	@classmethod
 	def with_segments(cls, *pathsegments):
 		"""Legacy method
@@ -440,46 +469,17 @@ class BasePurePath(tuple):
 		"""
 		
 		return cls(*pathsegments)
+	
+	@classmethod
+	def convert_path(cls, path):
+		"""Convert the provided path to an object of this class.
+		Very thin layer, just an optimization to avoid parsing the same object several times. It basically confirms that the path is in the right "format".
 
-	def with_stem(self, stem):
-		"""Different stem
-		Create a similar path with the stem replaced.
-		
-		:param stem: The stem for the new path instance
-		:return type(self): A new instance of this type of path with the new stem
+		:param path: The "path" to create the instance
+		:return cls: An instance of "cls" created out of "path"
 		"""
 		
-		if (not stem) and self.suffix:
-			raise ValueError("Can't clear stem while having suffix. Use with_name instead.")
-		
-		return self.with_name(stem + self.suffix)
-
-	def with_suffix(self, suffix):
-		"""Different suffix
-		Create a similar path with the suffix replaced. If the path has no suffix, add given suffix. If the given suffix is an empty string, remove the suffix from the path.
-		
-		:param suffix: The suffix for the new path instance
-		:return type(self): A new instance of this type of path with the new suffix
-		"""
-
-		if suffix and not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
-			raise ValueError('Invalid suffix {}'.format(suffix))
-		if not self.stem:
-			raise ValueError("Can't add suffix to empty stem. Use with_name instead.")
-		return self.with_name(self.stem + suffix)
-
-	def with_suffixes(self, *suffixes):
-		"""Different suffixes
-		Create a similar path with the suffixes replaced. If the path has no suffixes, add given suffixes. If no suffixes are given, remove the suffixes from the path.
-		
-		:param suffixes: The list of suffixes for the new path instance
-		:return type(self): A new instance of this type of path with the new suffixes
-		"""
-
-		for suffix in suffixes:
-			if not suffix.startswith(self.SUFFIX_SEPARATOR) or suffix == self.SUFFIX_SEPARATOR:
-				raise ValueError('Invalid suffix {}'.format(suffix))
-		return self.with_name(self.pure_stem + ''.join(suffixes))
+		return path if isinstance(path, cls) else cls(path)
 
 
 class BasePath(ABC):
@@ -497,16 +497,17 @@ class BasePath(ABC):
 	
 	def is_reserved(self):
 		"""Is it reserved?
-		Check if the path is somehow reserved. Checks the name, the path as relative, and the path as absolute. In the original module this method lives in the PurePath class. It was moved here because it was extended to actually check for absolute paths that are reserved (hence, an "impure" operation).
+		Check if the path is somehow reserved. Checks the name, the path as relative, and the fully resolved path. In the original module this method lives in the PurePath class. It was moved here because it was extended to actually check for resolved paths that are reserved (hence, an "impure" operation).
 
 		:return bool: True if the path contains one of the special names reserved by the system, or is a reserved relative path, or is a reserved absolute path
 		"""
 		
-		return (self.name in self.RESERVED_NAMES) or (self in self.RESERVED_RELATIVE_PATHS) or (self.absolute() in self.RESERVED_ABSOLUTE_PATHS)
+		return (self.name in self.RESERVED_NAMES) or (self in self.RESERVED_RELATIVE_PATHS) or (self.resolve() in self.RESERVED_ABSOLUTE_PATHS)
 	
 	## Parsing and generating URIs ##
 	
 	@classmethod
+	@abstractmethod
 	def from_uri(cls, uri):
 		"""From URI
 		Return a new path object from parsing a "file" URI.
@@ -515,8 +516,9 @@ class BasePath(ABC):
 		:return type(self): A new instance of this type of path based out of the URI
 		"""
 		
-		raise NotImplementedError('from_uri()')
+		raise NotImplementedError('from_uri')
 	
+	@abstractmethod
 	def as_uri(self):
 		"""As URI
 		Represent the path as a "file" URI.
@@ -524,7 +526,7 @@ class BasePath(ABC):
 		:return bool: A string representing the supposedly "file URI" for this path.
 		"""
 		
-		raise NotImplementedError('as_uri()')
+		raise NotImplementedError('as_uri')
 	
 	## Expanding and resolving paths ##
 	
@@ -850,10 +852,8 @@ class BasePath(ABC):
 		raise NotImplementedError('chmod')
 
 	def lchmod(self, mode):
-		"""
+		"""Change the file or symlink mode and permissions
 		Like chmod(), except if the path points to a symlink, the symlink's permissions are changed, rather than its target's.
 		"""
 
 		self.chmod(mode, follow_symlinks=False)
-
-	
