@@ -8,11 +8,9 @@ This module also tries to avoid assumptions about paths: people can come up with
 from logging import getLogger
 from os import name as os_name
 
-from ._base import BasePurePath
+from ._base import __version__, BasePurePath
 from .posix import PosixPath, PurePosixPath
 from .windows import PureWindowsPath
-
-__version__ = '0.1.0'
 
 LOGGER = getLogger(__name__)
 
