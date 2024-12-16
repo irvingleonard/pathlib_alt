@@ -109,35 +109,60 @@ class BaseOSPath(BasePath):
 		
 	## Expanding and resolving paths ##
 	
-	@classmethod
-	def home(cls):
-		"""
-		Return a new path pointing to expanduser('~').
-		"""
-		
-		return cls('~').expanduser()
-	
-	def expanduser(self):
-		"""
-		Return a new path with expanded ~ and ~user constructs. If a home directory can’t be resolved, RuntimeError is raised.
+	def expanduser(self, fail_hard=True):
+		"""Expand user
+		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved and the fail_hard parameter is True, RuntimeError is raised; otherwise the constructs are not replaced.
+
+		Ref: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_01
+
+		:return type(cls): A new instance of this type with the user's home directory expanded (or not)
 		"""
 		
-		if (not (self.drive or self.root)) and self._tail and (self._tail[0][:1] == '~'):
-			homedir = os.path.expanduser(self._tail[0])
-			if homedir[:1] == "~":
-				raise RuntimeError("Could not determine home directory.")
-			drive, root, tail = self._parse_path(homedir)
-			return self.__class__(drive=drive, root=root, tail=tail + self._tail[1:])
+		homedir = None
+		if (not (self.drive or self.root)) and self.tail:
+			if self.tail[0] == '~':
+				try:
+					homedir = self.home()
+				except RuntimeError:
+					if fail_hard:
+						raise
+			elif self.tail[0] and (self.tail[0][0] == '~'):
+				try:
+					homedir = self.home(user=self.tail[0][1:])
+				except RuntimeError:
+					if fail_hard:
+						raise
 		
-		return self
+		if homedir is None:
+			return self
+		else:
+			return self.__class__(drive=homedir.drive, root=homedir.root, tail=homedir.tail + self.tail[1:])
 	
 	@classmethod
 	def cwd(cls):
-		"""
-		Return a new path pointing to the current working directory
+		"""Return a new path pointing to the current working directory
+		There's the concept of "working directories per drive" in the Windows world. That's a very old concept, from the DOS days, which doesn't exist anymore, and it's faked by CMD & Co.
+		 
+		 Ref:
+		  - https://devblogs.microsoft.com/oldnewthing/20101011-00/?p=12563
+		  - https://ss64.com/nt/syntax-variables.html
+		  - https://ss64.com/nt/cd.html
 		"""
 		
 		return cls(cls._get_os_attr('getcwd'))
+	
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		if self.is_absolute():
+			return self
+		
+		cwd = self.cwd()
+		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail + self.tail)
 	
 	@abstractmethod
 	def resolve(self, strict=False):

@@ -165,46 +165,23 @@ class WindowsPath(BaseOSPath, PureWindowsPath):
 	## Expanding and resolving paths ##
 	
 	@classmethod
-	@abstractmethod
-	def home(cls):
+	def home(cls, user=None):
 		"""User home
 		Resolves the user’s home directory path. If the home directory can’t be resolved, RuntimeError is raised.
 
 		:return type(cls): A new instance of this type pointing to the current user's home directory
 		"""
 		
-		raise NotImplementedError('home')
-	
-	@abstractmethod
-	def expanduser(self):
-		"""Expand user
-		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved, RuntimeError is raised.
-
-		:return type(cls): A new instance of this type with the user's home directory expanded
-		"""
+		if user is not None:
+			raise NotImplementedError("Don't know how to get the home directory for a given user in Windows")
 		
-		raise NotImplementedError('expanduser')
-	
-	@classmethod
-	@abstractmethod
-	def cwd(cls):
-		"""Current working directory
-		Resolve the current working directory.
-
-		:return type(cls): A new instance of this type pointing to the current working directory
-		"""
-		
-		raise NotImplementedError('cwd')
-	
-	@abstractmethod
-	def absolute(self):
-		"""Anchor it, making it non-relative
-		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
-
-		:return type(cls): A new instance of this type which is anchored.
-		"""
-		
-		raise NotImplementedError('absolute')
+		environ = cls._get_os_attr('environ', call_it=False)
+		if 'USERPROFILE' in environ:
+			return cls(environ['USERPROFILE'])
+		elif ('HOMEDRIVE' in environ) and ('HOMEPATH' in environ):
+			return cls(environ['HOMEDRIVE']+environ['HOMEPATH'])
+		else:
+			raise RuntimeError('Home directory not available for current user')
 	
 	@abstractmethod
 	def resolve(self, strict=False):
@@ -226,3 +203,7 @@ class WindowsPath(BaseOSPath, PureWindowsPath):
 		"""
 		
 		raise NotImplementedError('readlink')
+	
+	@classmethod
+	def test(cls, *parts):
+		return cls(*parts).expanduser(fail_hard=True)

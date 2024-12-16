@@ -113,50 +113,15 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		environ = cls._get_os_attr('environ', call_it=False)
 		if user is None:
 			if ('HOME' in environ) and environ['HOME']:
-				return environ['HOME']
+				return cls(environ['HOME'])
 			else:
 				user = cls._get_os_attr('getlogin')
 				
 		try:
 			import pwd
-			return pwd.getpwnam(user).pw_dir
+			return cls(pwd.getpwnam(user).pw_dir)
 		except (ImportError, KeyError):
 			raise RuntimeError('Home directory not available for user "{}"'.format(user))
-	
-	def expanduser(self, fail_hard=True):
-		"""Expand user
-		Resolve the "~" and "~user" constructs. If a home directory can’t be resolved and the fail_hard parameter is True, RuntimeError is raised; otherwise the constructs are not replaced.
-		
-		Ref: https://pubs.opengroup.org/onlinepubs/9699919799/utilities/V3_chap02.html#tag_18_06_01
-
-		:return type(cls): A new instance of this type with the user's home directory expanded (or not)
-		"""
-		
-		if self.tail:
-			if self.tail[0] == '~':
-				try:
-					return self.home()
-				except RuntimeError:
-					if fail_hard:
-						raise
-			elif self.tail[0] and (self.tail[0][0] == '~'):
-				try:
-					return self.home(user=self.tail[0][1:])
-				except RuntimeError:
-					if fail_hard:
-						raise
-				
-		return self
-	
-	@abstractmethod
-	def absolute(self):
-		"""Anchor it, making it non-relative
-		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
-
-		:return type(cls): A new instance of this type which is anchored.
-		"""
-		
-		raise NotImplementedError('absolute')
 	
 	@abstractmethod
 	def resolve(self, strict=False):
@@ -181,4 +146,4 @@ class PosixPath(BaseOSPath, PurePosixPath):
 	
 	@classmethod
 	def test(cls, *parts):
-		return cls(*parts).expanduser(fail_hard=False)
+		return cls(*parts).absolute(fail_hard=False)
