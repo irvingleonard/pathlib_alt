@@ -136,4 +136,4 @@ class PosixPath(BaseOSPath, PurePosixPath):
 	
 	@classmethod
 	def test(cls, *parts):
-		return cls(*parts).absolute(fail_hard=False)
+		return cls(*parts).absolute()
