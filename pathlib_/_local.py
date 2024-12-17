@@ -37,6 +37,32 @@ class BaseOSPurePath(BasePurePath):
 			self._str = self._basic_str if self._basic_str else self.CURRENT_DIRECTORY_ENTRY
 			return self._str
 	
+	@classmethod
+	def _simplify_tail(cls, anchor='', *tail):
+		"""Simplify components
+		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence.
+		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'baz')
+
+		This implementation does a double loop over the tail components:
+		- first remove all the empty components
+		- then "resolve" the parent directory components by removing the previous component, if possible
+
+		:param tail: the tail of the Path to simplify
+		:return: simplified version of the provided tail
+		"""
+		
+		result = []
+		for component in tail:
+			if component in ('', cls.CURRENT_DIRECTORY_ENTRY):
+				continue
+			if component == cls.PARENT_DIRECTORY_ENTRY:
+				if result and (result[-1] != cls.PARENT_DIRECTORY_ENTRY) and (result[-1][0] != '~'):
+					result.pop()
+					continue
+			result.append(component)
+		
+		return result
+	
 	def relative_to(self, other, walk_up=False):
 		"""Relative to "other" path
 		Compute a version of this path relative to the path presented by "other". If it's impossible, ValueError is raised.
@@ -162,7 +188,7 @@ class BaseOSPath(BasePath):
 			return self
 		
 		cwd = self.cwd()
-		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail + self.tail)
+		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail+self.tail)
 	
 	@abstractmethod
 	def resolve(self, strict=False):
