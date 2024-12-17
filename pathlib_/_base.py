@@ -103,7 +103,6 @@ class BasePurePath(tuple):
 				raise ValueError("When using drive/root/tail value to build path you must provide the three of them.")
 			if args:
 				LOGGER.warning('Using drive/root/tail to build path; Ignoring provided paths: %s', args)
-			drive, root, tail = drive, root, tail
 		else:
 			paths = []
 			for arg in args:
@@ -242,8 +241,8 @@ class BasePurePath(tuple):
 
 		raise NotImplementedError('_parse_path()')
 	
-	@staticmethod
-	def _simplify_tail(anchor='', *tail):
+	@classmethod
+	def _simplify_tail(cls, anchor='', *tail):
 		"""Simplify components
 		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence.
 		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'baz')
