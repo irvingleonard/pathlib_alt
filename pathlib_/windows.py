@@ -194,16 +194,6 @@ class WindowsPath(BaseOSPath, PureWindowsPath):
 		
 		raise NotImplementedError('resolve')
 	
-	@abstractmethod
-	def readlink(self):
-		"""Resolve link
-		Resolves the path to which the symbolic link points
-
-		:return type(cls): A new instance of this type pointing to the symlink's target.
-		"""
-		
-		raise NotImplementedError('readlink')
-	
 	@classmethod
 	def test(cls, *parts):
 		return cls(*parts).expanduser(fail_hard=True)
