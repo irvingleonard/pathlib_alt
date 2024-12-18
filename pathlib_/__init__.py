@@ -29,3 +29,19 @@ class PurePath:
 			return PureWindowsPath(*args, **kwargs)
 		else:
 			return PurePosixPath(*args, **kwargs)
+
+
+class Path:
+	"""Path factory
+	It works under the POSIX vs Windows dichotomy: it will return a WindowsPath (built with the parameters provided) if it's running on Windows or a PosixPath otherwise.
+	"""
+	
+	def __new__(cls, *args, **kwargs):
+		"""Creation magic
+		Simple system detection to select the right class to instantiate.
+		"""
+		
+		if os_name == 'nt':
+			return WindowsPath(*args, **kwargs)
+		else:
+			return PosixPath(*args, **kwargs)
