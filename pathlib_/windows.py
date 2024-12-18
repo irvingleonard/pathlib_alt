@@ -183,6 +183,21 @@ class WindowsPath(BaseOSPath, PureWindowsPath):
 		else:
 			raise RuntimeError('Home directory not available for current user')
 	
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		if self.is_absolute():
+			return self
+		
+		cwd = self.cwd()
+		if self.drive and not self.root and (self.drive != cwd.drive):
+			raise RuntimeError("Don't know how to get the CWD on a different drive")
+		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail + self.tail)
+	
 	@abstractmethod
 	def resolve(self, strict=False):
 		"""Resolve the absolute path

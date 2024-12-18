@@ -123,6 +123,19 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		except (ImportError, KeyError):
 			raise RuntimeError('Home directory not available for user "{}"'.format(user))
 	
+	def absolute(self):
+		"""Anchor it, making it non-relative
+		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
+
+		:return type(cls): A new instance of this type which is anchored.
+		"""
+		
+		if self.is_absolute():
+			return self
+		
+		cwd = self.cwd()
+		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail + self.tail)
+	
 	@abstractmethod
 	def resolve(self, strict=False):
 		"""Resolve the absolute path
@@ -132,8 +145,15 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		:return type(cls): A new instance of this type which is absolute.
 		"""
 		
-		raise NotImplementedError('resolve')
+		rest, seen, link_count = self[::-1], {}, 0
+		result = self.__class__(drive='', root='/', tail=[]) if self.is_absolute() else self.cwd()
+		
+		while rest:
+			# result =
+			parent = rest.pop()
+			
+			
 	
 	@classmethod
-	def test(cls, *parts):
-		return cls(*parts).absolute()
+	def test(cls, *parts, child='.'):
+		return cls(*parts).child(name=child)
