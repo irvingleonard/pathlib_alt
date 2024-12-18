@@ -177,26 +177,6 @@ class BaseOSPath(BasePath):
 		
 		return cls(cls._get_os_attr('getcwd'))
 	
-	def absolute(self):
-		"""Anchor it, making it non-relative
-		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
-
-		:return type(cls): A new instance of this type which is anchored.
-		"""
-		
-		if self.is_absolute():
-			return self
-		
-		cwd = self.cwd()
-		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail+self.tail)
-	
-	@abstractmethod
-	def resolve(self, strict=False):
-		"""Make the path absolute, resolving any symlinks. A new path object is returned.
-		"""
-		
-		raise NotImplementedError('resolve')
-	
 	def readlink(self):
 		"""Return the path to which the symbolic link points
 		It's effectively forwarding the resolution to os.readlink with the current path
@@ -211,12 +191,6 @@ class BaseOSPath(BasePath):
 		"""
 
 		return self._get_os_attr('stat', self, follow_symlinks=follow_symlinks)
-	
-	def lstat(self):
-		"""Return the result of the stat() system call on this path, like os.stat() does.
-		"""
-		
-		return self.stat(follow_symlinks=False)
 
 	def exists(self, *, follow_symlinks=True):
 		""" Whether this path exists.
