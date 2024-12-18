@@ -275,6 +275,13 @@ class BasePurePath(tuple):
 				raise ValueError('Invalid character(s) in path component: "{}" -> {}'.format(invalid_chars, part))
 
 		return True
+	
+	def append(self, name):
+		"""Get child
+		Retrieve a child of this "directory". It's effectively just a version of "joinpath" that expects a single segment.
+		"""
+		
+		return self.__class__(drive=self.drive, root=self.root, tail=self.tail + (name,))
 
 	def as_posix(self):
 		"""As POSIX
