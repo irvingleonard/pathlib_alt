@@ -226,15 +226,9 @@ class BaseOSPath(BasePath):
 		"""
 
 		try:
-			return self._get_stat_attr('S_ISLNK', self.stat().st_mode)
+			return self._get_stat_attr('S_ISLNK', self.lstat().st_mode)
 		except (OSError, ValueError):
 			return False
-	
-	def is_symlink(self):
-		"""Whether this path is a symbolic link.
-		"""
-		
-		raise NotImplementedError('is_symlink')
 	
 	def is_mount(self):
 		"""Check if this path is a mount point
