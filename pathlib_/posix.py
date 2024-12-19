@@ -149,11 +149,11 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		result = self.__class__(drive='', root='/', tail=[]) if self.is_absolute() else self.cwd()
 		
 		while rest:
-			# result =
-			parent = rest.pop()
+			parent = result.append(rest.pop())
+			
 			
 			
 	
 	@classmethod
 	def test(cls, *parts, child='.'):
-		return cls(*parts).child(name=child)
+		return cls(*parts).is_symlink()
