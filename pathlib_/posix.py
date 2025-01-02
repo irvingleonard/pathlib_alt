@@ -6,6 +6,7 @@ This submodule contains the specifics for POSIX systems.
 """
 
 from abc import abstractmethod
+from errno import ELOOP
 from logging import getLogger
 import posixpath
 
@@ -70,14 +71,6 @@ class PosixPath(BaseOSPath, PurePosixPath):
 	
 	"""
 	
-	@classmethod
-	def new_instance(cls, *args, **kwargs):
-		"""
-		
-		"""
-		
-		return cls(*args, **kwargs).stat()
-	
 	## Parsing and generating URIs ##
 	
 	@classmethod
@@ -123,7 +116,7 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		except (ImportError, KeyError):
 			raise RuntimeError('Home directory not available for user "{}"'.format(user))
 	
-	def absolute(self):
+	def absolute(self, cwd=None):
 		"""Anchor it, making it non-relative
 		Make the path absolute by anchoring it. Does not "resolve" the path (interpret upwards movements or follow symlinks)
 
@@ -133,11 +126,12 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		if self.is_absolute():
 			return self
 		
-		cwd = self.cwd()
+		if cwd is None:
+			cwd = self.cwd()
 		return self.__class__(drive=cwd.drive, root=cwd.root, tail=cwd.tail + self.tail)
 	
 	@abstractmethod
-	def resolve(self, strict=False):
+	def resolve(self, *, strict=False, maxlinks=None, traversals=None, link_count=0):
 		"""Resolve the absolute path
 		Make the path absolute not only with an anchor but in the underlying filesystem by resolving upwards movements and following symlinks.
 
@@ -145,15 +139,43 @@ class PosixPath(BaseOSPath, PurePosixPath):
 		:return type(cls): A new instance of this type which is absolute.
 		"""
 		
-		rest, seen, link_count = self[::-1], {}, 0
-		result = self.__class__(drive='', root='/', tail=[]) if self.is_absolute() else self.cwd()
+		rest = list(self.simplified_tail[::-1])
+		if traversals is None:
+			traversals = {}
+		result = self.root_dir() if self.is_absolute() else self.cwd()
 		
 		while rest:
-			parent = result.append(rest.pop())
 			
+			part = rest.pop()
+			if part == self.PARENT_DIRECTORY_ENTRY:
+				result = result.parent
+				continue
+			result = result.append(part)
+			if result.is_symlink():
+				link_target = result.readlink()
+				if maxlinks is None:
+					if (result in traversals) and (traversals[result] == len(rest)):
+						if strict:
+							raise OSError(ELOOP, self._get_os_attr('strerror', ELOOP), str(result))
+						else:
+							return result.joinpath(*rest[::-1])
+					traversals[result] = len(rest)
+				else:
+					link_count += 1
+					if link_count > maxlinks:
+						raise OSError(ELOOP, self._get_os_attr('strerror', ELOOP), str(result))
+				if link_target.is_absolute() and not link_target.is_symlink():
+					result = link_target
+				else:
+					result = link_target.absolute(cwd=result.parent).resolve(strict=strict, maxlinks=maxlinks, traversals=traversals, link_count=link_count)
+			elif rest and not result.is_dir():
+				raise NotADirectoryError(result)
+		
+		return result
 			
 			
 	
 	@classmethod
 	def test(cls, *parts, child='.'):
+		return cls(*parts).resolve(strict=True)
 		return cls(*parts).is_symlink()
