@@ -400,6 +400,17 @@ class BasePurePath(tuple):
 			raise ValueError(f"{str(self)!r} is not in the subpath of {str(other)!r}")
 
 		return self.__class__(drive='', root='', tail=self.tail[len(other.tail):])
+	
+	@classmethod
+	def root_dir(cls):
+		"""Root directory
+		Return the root directory for the current class. If the class supports drives then it will raise a NotADirectoryError
+		"""
+		
+		if cls.DRIVE_SUPPORTED:
+			raise NotADirectoryError("There's no single root in a world with drives")
+		
+		return cls(drive='', root=cls.SEPARATOR, tail=[])
 
 	def with_name(self, name):
 		"""Different name
