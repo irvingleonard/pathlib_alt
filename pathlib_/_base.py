@@ -402,15 +402,17 @@ class BasePurePath(tuple):
 		return self.__class__(drive='', root='', tail=self.tail[len(other.tail):])
 	
 	@classmethod
-	def root_dir(cls):
+	def root_dir(cls, drive=None):
 		"""Root directory
 		Return the root directory for the current class. If the class supports drives then it will raise a NotADirectoryError
 		"""
 		
-		if cls.DRIVE_SUPPORTED:
-			raise NotADirectoryError("There's no single root in a world with drives")
+		if cls.DRIVE_SUPPORTED and (drive is None):
+			raise NotADirectoryError("Must provide a drive")
+		else:
+			drive = ''
 		
-		return cls(drive='', root=cls.SEPARATOR, tail=[])
+		return cls(drive=drive, root=cls.SEPARATOR, tail=[])
 
 	def with_name(self, name):
 		"""Different name
