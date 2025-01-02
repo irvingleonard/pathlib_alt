@@ -41,7 +41,7 @@ class BaseOSPurePath(BasePurePath):
 	def _simplify_tail(cls, anchor='', *tail):
 		"""Simplify components
 		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence.
-		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'baz')
+		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'baz'). This method works with the conceptual version of the path; concrete paths should not "assume" relative movements since the presence of symlinks can change the result.
 
 		This implementation does a double loop over the tail components:
 		- first remove all the empty components
@@ -132,6 +132,26 @@ class BaseOSPath(BasePath):
 		"""
 		
 		pass
+	
+	@classmethod
+	def _simplify_tail(cls, anchor='', *tail):
+		"""Simplify components
+		The concept is that it will apply local path logic to "resolve" all possible path components without actually looking for its existence. Because of the existence of symlinks in POSIX and Windows, relative movements can't be assumed but should be actually resolved. This implementation only removes "empty" components, to improve comparisons.
+		Ex: the POSIX/Windows path ('foo', '', 'bar', '..', 'baz', '.') would be simplified to ('foo', 'bar', '..', 'baz').
+
+		This implementation goes over every tail component and removes the empty ones.
+
+		:param tail: the tail of the Path to simplify
+		:return: simplified version of the provided tail
+		"""
+		
+		result = []
+		for component in tail:
+			if component in ('', cls.CURRENT_DIRECTORY_ENTRY):
+				continue
+			result.append(component)
+		
+		return result
 		
 	## Expanding and resolving paths ##
 	
