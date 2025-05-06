@@ -12,7 +12,7 @@ jobs:
       contents: write
       id-token: write
       actions: write
-    uses: irvingleonard/reusable-workflows/.github/workflows/python-build-publish-development-package.yml@v0.0.1
+    uses: irvingleonard/reusable-workflows/.github/workflows/python-build-publish-development-package.yml@v0.0.3
     with:
       package-name: ${{ vars.PACKAGE_NAME }}
     secrets:
