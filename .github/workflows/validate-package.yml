@@ -1,6 +1,6 @@
 # Workflow to validate python packages
 
-name: Validate Python package
+name: Validate Package
 on:
   pull_request:
     types: [opened, synchronize, reopened]
