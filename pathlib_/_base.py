@@ -13,7 +13,7 @@ from re import IGNORECASE as RE_IGNORECASE, NOFLAG as RE_NOFLAG, match as re_mat
 
 from pathlib_.glob_ import translate as glob_translate
 
-__version__ = '0.1.1.dev0'
+__version__ = '0.1.1.dev1'
 
 JOINPATH_INSANE_BEHAVIOR = False
 LOGGER = getLogger(__name__)
